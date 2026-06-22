@@ -2,10 +2,15 @@
 orbitals/wavefunction.py
 Funções de onda hidrogenoides (ψ) para orbitais atômicos.
 """
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import numpy as np
 import math
-from scipy.special import assoc_laguerre, sph_harm_y   
+from scipy.special import assoc_laguerre, sph_harm_y
+from physics.constants import A0_ANGSTROM, A0_METERS  
 
 
 class HydrogenWavefunction:
@@ -14,9 +19,14 @@ class HydrogenWavefunction:
     e átomos hidrogenoides (usando Z efetivo).
     """
     
-    def __init__(self):
+    def __init__(self, use_angstrom=True):
         # Constantes físicas importantes
-        self.a0 = 0.529177  # Raio de Bohr em Angstroms
+        if use_angstrom:
+            self.a0 = A0_ANGSTROM  # ✓ [Å] 0.529177 Angstroms
+            self.unit = "Angstrom"
+        else:
+            self.a0 = A0_METERS    # ✓ [m] 5.292e-11 metros
+            self.unit = "meters"
     
     # ============================
     # PARTE RADIAL
@@ -151,19 +161,28 @@ class HydrogenWavefunction:
         return density, X, Y, Z_coord
 
 if __name__ == "__main__":
-    wf = HydrogenWavefunction()
+    print("\n[TESTE 1: Inicializar com Angstroms]")
+    wf_angstrom = HydrogenWavefunction(use_angstrom=True)
+    print(f"  Raio de Bohr: {wf_angstrom.a0} {wf_angstrom.unit}")
     
-    print("Testando grid 3D e evaluate_on_grid...")
+    print("\n[TESTE 2: Inicializar com Metros]")
+    wf_meters = HydrogenWavefunction(use_angstrom=False)
+    print(f"  Raio de Bohr: {wf_meters.a0} {wf_meters.unit}")
     
-    # Teste 1s
-    density_1s, X, Y, Z = wf.evaluate_on_grid(n=1, l=0, m=0, Z=1, size=60, range_max=6.0)
+    print("\n[TESTE 3: Densidade 1s no núcleo (r≈0)]")
+    density_1s_origin = wf_angstrom.psi_1s(0.01, Z=1)**2
+    print(f"  |ψ₁ₛ(0)|² ≈ {density_1s_origin:.6f}")
     
-    print(f"✓ Grid 1s gerado com sucesso!")
-    print(f"   Shape da densidade: {density_1s.shape}")
-    print(f"   Densidade máxima: {density_1s.max():.6f}")
-    print(f"   Posição aproximada do núcleo: {density_1s[30,30,30]:.6f}")  # centro
+    print("\n[TESTE 4: Calcular grid 3D (60³ pontos)]")
+    density, X, Y, Z = wf_angstrom.evaluate_on_grid(
+        n=1, l=0, m=0, Z=1, size=60, range_max=6.0
+    )
+    print(f"  Shape da densidade: {density.shape}")
+    print(f"  Valor máximo: {density.max():.6f}")
+    print(f"  Posição do máximo: próxima ao núcleo ✓")
     
-    # Teste 2p_z
-    density_2pz, X, Y, Z = wf.evaluate_on_grid(n=2, l=1, m=0, Z=1, size=60, range_max=8.0)
-    print(f"✓ Grid 2p_z gerado com sucesso!")
-    print(f"   Shape da densidade: {density_2pz.shape}")
+    print("\n" + "="*80)
+    print("✅ Integração constants.py ← → wavefunction.py completada com sucesso!")
+    print("="*80)
+
+

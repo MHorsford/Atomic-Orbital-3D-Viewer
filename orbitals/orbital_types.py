@@ -5,6 +5,10 @@ Configurações e metadados dos tipos de orbitais (s, p, d, f).
 Este arquivo serve como referência central para características 
 comuns de cada tipo de orbital.
 """
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from dataclasses import dataclass
 from typing import Dict, Tuple
@@ -67,6 +71,9 @@ def get_orbital_name(n: int, l: int) -> str:
 def get_max_electrons(l: int) -> int:
     """Retorna a capacidade máxima de elétrons para o subnível"""
     return get_orbital_type(l).max_electrons
+
+# Compatibilidade com nomes usados em outros módulos
+max_electrons_in_subshell = get_max_electrons
 
 
 def get_default_color(l: int) -> Tuple[float, float, float]:
