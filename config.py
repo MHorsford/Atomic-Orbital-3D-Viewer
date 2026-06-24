@@ -54,7 +54,7 @@ MAX_Z = 54          # Até Xenônio (limite prático)
 
 # Intervalo de nível principal
 MIN_N = 1
-MAX_N = 4
+MAX_N = 4 # Alterando de 4 para 7
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PALETA DE CORES PARA ORBITAIS
