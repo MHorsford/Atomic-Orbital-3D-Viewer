@@ -41,7 +41,7 @@ class HydrogenWavefunction:
         
         # Normalização
         norm = np.sqrt( (2*Z/(n*self.a0))**3 * math.factorial(n - l - 1) / 
-                   (2 * n * (math.factorial(n + l))) )
+                   (2 * n * (math.factorial(n + l))))
         
         # Termos
         exp_term = np.exp(-rho / 2)
@@ -55,24 +55,50 @@ class HydrogenWavefunction:
     # PARTE ANGULAR
     # ============================
     
+#    def angular_part(self, theta, phi, l, m): # Mudanças
+#        """
+#        Calcula a parte angular Y_{l,m}(θ, φ) - Harmônicos Esféricos
+#        """
+#        # sph_harm_y(l, m, theta, phi) -> theta = azimuthal, phi = polar
+#        return sph_harm_y(l, m, theta, phi)
+
+    
     def angular_part(self, theta, phi, l, m):
         """
-        Calcula a parte angular Y_{l,m}(θ, φ) - Harmônicos Esféricos
+        Retorna os harmônicos esféricos REAIS (orbitais reais) para qualquer l e m.
+        Usa as combinações lineares padrão da literatura:
+        - m = 0   → Y_l^0 (já é real)
+        - m > 0   → (Y_l^{-m} + (-1)^m Y_l^m) / sqrt(2)
+        - m < 0   → i * (Y_l^{|m|} - (-1)^{|m|} Y_l^{-|m|}) / sqrt(2)
         """
-        # sph_harm_y(l, m, theta, phi) -> theta = azimuthal, phi = polar
-        return sph_harm_y(l, m, theta, phi)
+
+        if m == 0:
+            # Y_l^0 é puramente real (fase de Condon-Shortley já incluída)
+            return np.real(sph_harm_y(l, 0, theta, phi))
+        
+        elif m > 0:
+            # Combinação par (cosseno) → gera orbitais como p_x, d_xy, etc.
+            Y_m = sph_harm_y(l, m, theta, phi)
+            Y_minus_m = sph_harm_y(l, -m, theta, phi)
+            return np.real((Y_minus_m + (-1)**m * Y_m) / np.sqrt(2))
+        
+        else:  # m < 0
+            # Combinação ímpar (seno) → gera orbitais como p_y, d_xz, etc.
+            k = -m  # |m|
+            Y_k = sph_harm_y(l, k, theta, phi)
+            Y_minus_k = sph_harm_y(l, -k, theta, phi)
+            # O fator 1j garante que o resultado seja puramente real
+            return np.real(1j * (Y_k - (-1)**k * Y_minus_k) / np.sqrt(2))
     
     # ============================
     # FUNÇÃO DE ONDA COMPLETA
     # ============================
     
     def psi(self, r, theta, phi, n, l, m, Z=1):
-        """
-        Função de onda completa ψ_{n,l,m}(r, θ, φ)
-        """
+        """Função de onda completa usando a parte angular REAL."""
         R_nl = self.radial_wavefunction(r, n, l, Z)
-        Y_lm = self.angular_part(theta, phi, l, m)
-        return R_nl * Y_lm
+        Y_lm_real = self.angular_part(theta, phi, l, m)
+        return R_nl * Y_lm_real
     
     def probability_density(self, r, theta, phi, n, l, m, Z=1):
         """ |ψ|² """
@@ -137,30 +163,24 @@ class HydrogenWavefunction:
         
         return X, Y, Z, R, Theta, Phi
     
+
     def evaluate_on_grid(self, n, l, m, Z=1, size=80, range_max=8.0):
-            """
-            Avalia a amplitude da função de onda (ψ) em todo o grid 3D
-            """
-            X, Y, Z_coord, R, Theta, Phi = self.generate_grid(size, range_max)
-            
-            if n == 1 and l == 0:
-                wave = self.psi_1s(R, Theta, Phi, Z)
-            elif n == 2 and l == 0:
-                wave = self.psi_2s(R, Theta, Phi, Z)
-            elif n == 2 and l == 1:
-                if m == 0:
-                    wave = self.psi_2p_z(R, Theta, Phi, Z)
-                elif m == 1:
-                    wave = self.psi_2p_x(R, Theta, Phi, Z)
-                else:
-                    wave = self.psi_2p_y(R, Theta, Phi, Z)
-            else:
-                # RETORNA A FUNÇÃO DE ONDA PURA (ψ), NÃO A DENSIDADE
-                wave_complex = self.psi(R, Theta, Phi, n, l, m, Z)
-                # Extrai a parte real para capturar as fases espaciais
-                wave = np.real(wave_complex)
-            
-            return wave, X, Y, Z_coord
+        """
+        Avalia a amplitude da função de onda (ψ) em todo o grid 3D.
+        Agora usa harmônicos esféricos REAIS para todos os orbitais.
+        """
+        X, Y, Z_coord, R, Theta, Phi = self.generate_grid(size, range_max)
+        
+        # Radial
+        radial = self.radial_wavefunction(R, n, l, Z)
+        
+        # Angular real (funciona para s, p, d, f, g...)
+        angular = self.angular_part(Theta, Phi, l, m)
+        
+        # Função de onda
+        wave = radial * angular
+        
+        return wave, X, Y, Z_coord
 
 if __name__ == "__main__":
     print("\n[TESTE 1: Inicializar com Angstroms]")
