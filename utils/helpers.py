@@ -11,6 +11,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import numpy as np
 
 
+# Em utils/helpers.py, substitua a função quantum_label por esta:
+
 def quantum_label(n: int, l: int, m: int = None) -> str:
     """
     Converte números quânticos em rótulo legível.
@@ -19,17 +21,21 @@ def quantum_label(n: int, l: int, m: int = None) -> str:
         quantum_label(1, 0) → "1s"
         quantum_label(2, 1, 0) → "2p_z"
         quantum_label(3, 2, 1) → "3d_+1"
+        quantum_label(5, 4, 0) → "5g_0"  (novo!)
     
     Parâmetros:
         n : número quântico principal
-        l : número quântico azimutal (0=s, 1=p, 2=d, 3=f)
+        l : número quântico azimutal (0=s, 1=p, 2=d, 3=f, 4=g, 5=h, 6=i)
         m : número quântico magnético (opcional)
     
     Retorna:
         String com o rótulo
     """
-    letter_map = {0: 's', 1: 'p', 2: 'd', 3: 'f', 4: 'g', 5: 'h'}
-    l_letter = letter_map.get(l, f'?{l}')
+    from orbitals.orbital_types import get_orbital_type
+    
+    # Usar o tipo oficial do orbital_types
+    orbital_type = get_orbital_type(l)
+    l_letter = orbital_type.letter
     
     label = f"{n}{l_letter}"
     
@@ -42,7 +48,11 @@ def quantum_label(n: int, l: int, m: int = None) -> str:
         elif l == 2:  # d
             m_names = {-2: 'xy', -1: 'yz', 0: 'z²', 1: 'xz', 2: 'x²-y²'}
             label += f"_{m_names.get(m, f'{m}')}"
+        elif l == 3:  # f
+            # Nomes não são padronizados no ensino básico, usamos m numérico
+            label += f"_{m:+d}"
         else:
+            # Para g, h, i, usamos apenas o valor de m
             label += f"_{m:+d}"
     
     return label

@@ -7,11 +7,6 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import sys
-import os
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import numpy as np
 import math
 from scipy.special import assoc_laguerre, sph_harm_y
@@ -27,10 +22,10 @@ class HydrogenWavefunction:
     def __init__(self, use_angstrom=True):
         # Constantes físicas importantes
         if use_angstrom:
-            self.a0 = A0_ANGSTROM  # ✓ [Å] 0.529177 Angstroms
+            self.a0 = A0_ANGSTROM  # [Å] 0.529177 Angstroms
             self.unit = "Angstrom"
         else:
-            self.a0 = A0_METERS    # ✓ [m] 5.292e-11 metros
+            self.a0 = A0_METERS    # [m] 5.292e-11 metros
             self.unit = "meters"
     
     # ============================
@@ -46,7 +41,7 @@ class HydrogenWavefunction:
         
         # Normalização
         norm = np.sqrt( (2*Z/(n*self.a0))**3 * math.factorial(n - l - 1) / 
-                   (2 * n * (math.factorial(n + l))**2) )
+                   (2 * n * (math.factorial(n + l))) )
         
         # Termos
         exp_term = np.exp(-rho / 2)
@@ -143,27 +138,29 @@ class HydrogenWavefunction:
         return X, Y, Z, R, Theta, Phi
     
     def evaluate_on_grid(self, n, l, m, Z=1, size=80, range_max=8.0):
-        """
-        Avalia |ψ|² em todo o grid 3D
-        """
-        X, Y, Z_coord, R, Theta, Phi = self.generate_grid(size, range_max)
-        
-        if n == 1 and l == 0:
-            density = self.psi_1s(R, Theta, Phi, Z)
-        elif n == 2 and l == 0:
-            density = self.psi_2s(R, Theta, Phi, Z)
-        elif n == 2 and l == 1:
-            if m == 0:
-                density = self.psi_2p_z(R, Theta, Phi, Z)
-            elif m == 1:
-                density = self.psi_2p_x(R, Theta, Phi, Z)  # simplificado
+            """
+            Avalia a amplitude da função de onda (ψ) em todo o grid 3D
+            """
+            X, Y, Z_coord, R, Theta, Phi = self.generate_grid(size, range_max)
+            
+            if n == 1 and l == 0:
+                wave = self.psi_1s(R, Theta, Phi, Z)
+            elif n == 2 and l == 0:
+                wave = self.psi_2s(R, Theta, Phi, Z)
+            elif n == 2 and l == 1:
+                if m == 0:
+                    wave = self.psi_2p_z(R, Theta, Phi, Z)
+                elif m == 1:
+                    wave = self.psi_2p_x(R, Theta, Phi, Z)
+                else:
+                    wave = self.psi_2p_y(R, Theta, Phi, Z)
             else:
-                density = self.psi_2p_y(R, Theta, Phi, Z)
-        else:
-            # Usa a função geral para outros casos
-            density = self.probability_density(R, Theta, Phi, n, l, m, Z)
-        
-        return density, X, Y, Z_coord
+                # RETORNA A FUNÇÃO DE ONDA PURA (ψ), NÃO A DENSIDADE
+                wave_complex = self.psi(R, Theta, Phi, n, l, m, Z)
+                # Extrai a parte real para capturar as fases espaciais
+                wave = np.real(wave_complex)
+            
+            return wave, X, Y, Z_coord
 
 if __name__ == "__main__":
     print("\n[TESTE 1: Inicializar com Angstroms]")

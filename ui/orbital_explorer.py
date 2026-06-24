@@ -16,13 +16,14 @@ from pathlib import Path
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel,
     QPushButton, QComboBox, QSpinBox, QGroupBox, QGridLayout, QTextEdit,
-    QApplication
+    QApplication, QCheckBox
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
 
 from orbitals.orbital import Orbital
 from utils.helpers import quantum_label
+from config import MAX_N, MAX_Z, ISO_VALUE
 import numpy as np
 
 
@@ -81,107 +82,103 @@ class OrbitalExplorer(QMainWindow):
     # ─────────────────────────────────────────────────────────────────────
     
     def create_control_panel(self):
-        """Cria o painel de controle com sliders."""
-        control_panel = QGroupBox("Controles de Orbital")
-        layout = QGridLayout()
-        
-        # ──── ELEMENTO (ComboBox) ────
-        layout.addWidget(QLabel("Elemento (Z):"), 0, 0)
-        """Cria o painel de controle com sliders."""
-        control_panel = QGroupBox("Controles de Orbital")
-        layout = QGridLayout()
+            control_panel = QGroupBox("Controles de Orbital")
+            layout = QGridLayout()
 
-        # ──── ELEMENTO (ComboBox) ────
-        layout.addWidget(QLabel("Elemento (Z):"), 0, 0)
-        self.combo_element = QComboBox()
-        
-        # Carregar TODOS os elementos da tabela periódica
-        elements = self.load_all_elements()
-        for name, Z in elements:
-            self.combo_element.addItem(name, Z)
-        
-        self.combo_element.currentIndexChanged.connect(self.on_element_changed)
-        layout.addWidget(self.combo_element, 0, 1)
-        
-        # ──── NÚMERO QUÂNTICO n ────
-        layout.addWidget(QLabel("Nível Quântico (n):"), 1, 0)
-        self.slider_n = QSlider(Qt.Horizontal)
-        self.slider_n.setRange(1, 5)
-        self.slider_n.setValue(1)
-        self.slider_n.sliderMoved.connect(self.schedule_update)
-        self.slider_n.valueChanged.connect(self.on_n_changed)
-        layout.addWidget(self.slider_n, 1, 1)
-        
-        self.label_n = QLabel("n = 1")
-        self.label_n.setFont(QFont("Courier", 11, QFont.Bold))
-        layout.addWidget(self.label_n, 1, 2)
-        
-        # ──── TIPO ORBITAL (l) ────
-        layout.addWidget(QLabel("Tipo Orbital (l):"), 2, 0)
-        self.slider_l = QSlider(Qt.Horizontal)
-        self.slider_l.setRange(0, 3)
-        self.slider_l.setValue(0)
-        self.slider_l.sliderMoved.connect(self.schedule_update)
-        self.slider_l.valueChanged.connect(self.on_l_changed)
-        layout.addWidget(self.slider_l, 2, 1)
-        
-        self.label_l = QLabel("l = 0 (s)")
-        self.label_l.setFont(QFont("Courier", 11, QFont.Bold))
-        layout.addWidget(self.label_l, 2, 2)
-        
-        # ──── ORIENTAÇÃO (m) ────
-        layout.addWidget(QLabel("Orientação (m):"), 3, 0)
-        self.slider_m = QSlider(Qt.Horizontal)
-        self.slider_m.setRange(-3, 3)
-        self.slider_m.setValue(0)
-        self.slider_m.sliderMoved.connect(self.schedule_update)
-        self.slider_m.valueChanged.connect(self.on_m_changed)
-        layout.addWidget(self.slider_m, 3, 1)
-        
-        self.label_m = QLabel("m = 0")
-        self.label_m.setFont(QFont("Courier", 11, QFont.Bold))
-        layout.addWidget(self.label_m, 3, 2)
-        
-        # ──── MODO DE RENDERIZAÇÃO ────
-        layout.addWidget(QLabel("Modo Renderização:"), 4, 0)
-        self.combo_mode = QComboBox()
-        self.combo_mode.addItems(["isosurface", "volume", "points"])
-        self.combo_mode.currentTextChanged.connect(self.on_mode_changed)
-        layout.addWidget(self.combo_mode, 4, 1)
-        
-        # ──── ISO VALUE ────
-        layout.addWidget(QLabel("Isosurface Value:"), 5, 0)
-        self.slider_iso = QSlider(Qt.Horizontal)
-        self.slider_iso.setRange(1, 100)
-        self.slider_iso.setValue(2)
-        self.slider_iso.sliderMoved.connect(self.schedule_update)
-        layout.addWidget(self.slider_iso, 5, 1)
-        
-        self.label_iso = QLabel("0.02")
-        layout.addWidget(self.label_iso, 5, 2)
-        
-        # ──── BOTÕES DE AÇÃO ────
-        button_layout = QVBoxLayout()
-        
-        self.btn_render = QPushButton("🎨 Renderizar Orbital")
-        self.btn_render.setStyleSheet("background-color: #2ecc71; color: white; font-weight: bold;")
-        self.btn_render.clicked.connect(self.on_render_clicked)
-        button_layout.addWidget(self.btn_render)
-        
-        self.btn_all_filled = QPushButton("📊 Mostrar Preenchidos")
-        self.btn_all_filled.setStyleSheet("background-color: #3498db; color: white;")
-        self.btn_all_filled.clicked.connect(self.on_show_filled)
-        button_layout.addWidget(self.btn_all_filled)
-        
-        self.btn_sequence = QPushButton("📈 Sequência Aufbau")
-        self.btn_sequence.setStyleSheet("background-color: #e74c3c; color: white;")
-        self.btn_sequence.clicked.connect(self.on_sequence_clicked)
-        button_layout.addWidget(self.btn_sequence)
-        
-        layout.addLayout(button_layout, 6, 0, 1, 3)
-        
-        control_panel.setLayout(layout)
-        self.main_layout.addWidget(control_panel, stretch=1)
+            # Elemento
+            layout.addWidget(QLabel("Elemento (Z):"), 0, 0)
+            self.combo_element = QComboBox()
+            for name, Z in self.load_all_elements():
+                if Z <= MAX_Z:  # <--- Respeita o limite do config
+                    self.combo_element.addItem(name, Z)
+            self.combo_element.currentIndexChanged.connect(self.on_element_changed)
+            layout.addWidget(self.combo_element, 0, 1)
+
+            # n            
+            layout.addWidget(QLabel("Nível Quântico (n):"), 1, 0)
+            self.slider_n = QSlider(Qt.Horizontal)
+            self.slider_n.setRange(1, MAX_N)  # <--- Puxa dinamicamente do config
+            self.slider_n.setValue(1)
+            self.slider_n.sliderMoved.connect(self.schedule_update)
+            self.slider_n.valueChanged.connect(self.on_n_changed)
+            layout.addWidget(self.slider_n, 1, 1)
+            self.label_n = QLabel("n = 1")
+            self.label_n.setFont(QFont("Courier", 11, QFont.Bold))
+            layout.addWidget(self.label_n, 1, 2)
+
+            # l
+            layout.addWidget(QLabel("Tipo Orbital (l):"), 2, 0)
+            self.slider_l = QSlider(Qt.Horizontal)
+            self.slider_l.setRange(0, MAX_N - 1)  # <--- l vai até n-1 máximo global
+            self.slider_l.setValue(0)
+            self.slider_l.sliderMoved.connect(self.schedule_update)
+            self.slider_l.valueChanged.connect(self.on_l_changed)
+            layout.addWidget(self.slider_l, 2, 1)
+            self.label_l = QLabel("l = 0 (s)")
+            self.label_l.setFont(QFont("Courier", 11, QFont.Bold))
+            layout.addWidget(self.label_l, 2, 2)
+
+            # m
+            layout.addWidget(QLabel("Orientação (m):"), 3, 0)
+            self.slider_m = QSlider(Qt.Horizontal)
+            self.slider_m.setRange(-3, 3)
+            self.slider_m.setValue(0)
+            self.slider_m.sliderMoved.connect(self.schedule_update)
+            self.slider_m.valueChanged.connect(self.on_m_changed)
+            layout.addWidget(self.slider_m, 3, 1)
+            self.label_m = QLabel("m = 0")
+            self.label_m.setFont(QFont("Courier", 11, QFont.Bold))
+            layout.addWidget(self.label_m, 3, 2)
+
+            # Modo renderização
+            layout.addWidget(QLabel("Modo Renderização:"), 4, 0)
+            self.combo_mode = QComboBox()
+            self.combo_mode.addItems(["isosurface", "volume", "points"])
+            self.combo_mode.currentTextChanged.connect(self.on_mode_changed)
+            layout.addWidget(self.combo_mode, 4, 1)
+
+            # Iso value
+            layout.addWidget(QLabel("Isosurface Value:"), 5, 0)
+            self.slider_iso = QSlider(Qt.Horizontal)
+            self.slider_iso.setRange(1, 100)
+            
+            # Converte o valor do config (ex: 0.12 -> 12)
+            initial_iso_slider_val = int(ISO_VALUE * 100)
+            self.slider_iso.setValue(initial_iso_slider_val) 
+            self.slider_iso.sliderMoved.connect(self.schedule_update)
+            layout.addWidget(self.slider_iso, 5, 1)
+            
+            self.label_iso = QLabel(f"{ISO_VALUE:.3f}") # Texto sincronizado
+            layout.addWidget(self.label_iso, 5, 2)
+
+            # Alta qualidade
+            layout.addWidget(QLabel("Alta Qualidade:"), 6, 0)
+            self.check_quality = QCheckBox("PBR + Fundo Preto")
+            self.check_quality.setChecked(self.simulator.scene.high_quality)
+            self.check_quality.stateChanged.connect(self.on_quality_toggled)
+            layout.addWidget(self.check_quality, 6, 1)
+
+            # Botões
+            button_layout = QVBoxLayout()
+            self.btn_render = QPushButton("🎨 Renderizar Orbital")
+            self.btn_render.setStyleSheet("background-color: #2ecc71; color: white; font-weight: bold;")
+            self.btn_render.clicked.connect(self.on_render_clicked)
+            button_layout.addWidget(self.btn_render)
+
+            self.btn_all_filled = QPushButton("📊 Mostrar Preenchidos")
+            self.btn_all_filled.setStyleSheet("background-color: #3498db; color: white;")
+            self.btn_all_filled.clicked.connect(self.on_show_filled)
+            button_layout.addWidget(self.btn_all_filled)
+
+            self.btn_sequence = QPushButton("📈 Sequência Aufbau")
+            self.btn_sequence.setStyleSheet("background-color: #e74c3c; color: white;")
+            self.btn_sequence.clicked.connect(self.on_sequence_clicked)
+            button_layout.addWidget(self.btn_sequence)
+
+            layout.addLayout(button_layout, 7, 0, 1, 3)
+
+            control_panel.setLayout(layout)
+            self.main_layout.addWidget(control_panel, stretch=1)
     
     def create_info_panel(self):
         """Cria o painel de informações."""
@@ -220,13 +217,19 @@ class OrbitalExplorer(QMainWindow):
         self.simulator.atom = Atom(Z=Z)
         self.update_limits()
         self.on_render_clicked()
+
+    def on_quality_toggled(self, state):
+        """Alterna entre renderização normal e de alta qualidade."""
+        high = (state == Qt.Checked)
+        self.simulator.set_high_quality(high)
+        self.on_render_clicked()   # re-renderiza para ver a diferença
     
     def on_n_changed(self):
         """Quando muda o nível quântico n."""
         n = self.slider_n.value()
         self.label_n.setText(f"n = {n}")
         
-        # Limitar l
+        # 🔥 NOVO: Limitar l dinamicamente baseado em n
         max_l = n - 1
         self.slider_l.setMaximum(max_l)
         if self.slider_l.value() > max_l:
@@ -236,9 +239,11 @@ class OrbitalExplorer(QMainWindow):
     
     def on_l_changed(self):
         """Quando muda o tipo orbital l."""
+        from orbitals.orbital_types import get_orbital_type
+        
         l = self.slider_l.value()
-        l_names = {0: "s", 1: "p", 2: "d", 3: "f"}
-        self.label_l.setText(f"l = {l} ({l_names.get(l, '?')})")
+        orbital_type = get_orbital_type(l)
+        self.label_l.setText(f"l = {l} ({orbital_type.letter})")
         
         # Limitar m
         self.slider_m.setRange(-l, l)
@@ -379,6 +384,7 @@ class OrbitalExplorer(QMainWindow):
         from physics.screening import slater_effective_charge
         
         # Nome do orbital
+        orbital_type = get_orbital_type(l)
         orbital_name = quantum_label(n, l, m)
         self.label_orbital_name.setText(f"{orbital_name}")
         
@@ -417,7 +423,7 @@ class OrbitalExplorer(QMainWindow):
         }
         
         desc = descriptions.get((n, l), "Orbital de alta energia")
-        self.label_description.setText(desc)
+        self.label_description.setText(orbital_type.description)
     
     def update_info_filled(self):
         """Atualiza info mostrando configuração eletrônica."""

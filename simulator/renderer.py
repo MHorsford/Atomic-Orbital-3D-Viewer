@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import numpy as np
 import pyvista as pv
 from config import ISO_VALUE, GRID_SIZE, GRID_RANGE, NUM_POINTS_CLOUD
+from config import HIGH_QUALITY_RENDER, METALLIC, ROUGHNESS, SPECULAR, SPECULAR_POWER
 from utils.grid import make_grid, normalize_array
 from utils.sampling import sample_orbital_grid
 from utils.helpers import quantum_label
@@ -29,6 +30,9 @@ class Renderer:
         self.grid_size = GRID_SIZE
         self.grid_range = GRID_RANGE
         self.point_cloud_size = NUM_POINTS_CLOUD
+        self.roughness = ROUGHNESS
+        self.specular = SPECULAR
+        self.specular_power = SPECULAR_POWER
     
     def set_mode(self, mode: str):
         """
@@ -49,20 +53,14 @@ class Renderer:
     
     def render_isosurface(self, orbital):
         """
-        Renderiza um orbital como isosuperfície (superfície de probabilidade constante).
-        
-        Parâmetros:
-            orbital : objeto Orbital
-        
-        Retorna:
-            pyvista.PolyData com a malha
+        Renderiza um orbital extraindo duas isossuperfícies (fases positiva e negativa).
         """
-        # Calcular densidade no grid
-        density, X, Y, Z = orbital.get_density(self.grid_size, self.grid_range)
+        # A função get_density agora retorna a amplitude da onda (graças à alteração anterior)
+        wave, X, Y, Z = orbital.get_density(self.grid_size, self.grid_range)
         
-        # Criar grid ImageData (mais apropriado para dados regulares)
+        # Criar grid ImageData
         grid = pv.ImageData()
-        grid.dimensions = density.shape
+        grid.dimensions = wave.shape
         
         # Definir origem e espaçamento
         x_min, x_max = X.min(), X.max()
@@ -71,27 +69,30 @@ class Renderer:
         
         grid.origin = (x_min, y_min, z_min)
         grid.spacing = (
-            (x_max - x_min) / (density.shape[0] - 1) if density.shape[0] > 1 else 1.0,
-            (y_max - y_min) / (density.shape[1] - 1) if density.shape[1] > 1 else 1.0,
-            (z_max - z_min) / (density.shape[2] - 1) if density.shape[2] > 1 else 1.0
+            (x_max - x_min) / (wave.shape[0] - 1) if wave.shape[0] > 1 else 1.0,
+            (y_max - y_min) / (wave.shape[1] - 1) if wave.shape[1] > 1 else 1.0,
+            (z_max - z_min) / (wave.shape[2] - 1) if wave.shape[2] > 1 else 1.0
         )
-        grid['density'] = density.flatten(order='F')
+        grid['wave'] = wave.flatten(order='F')
         
-        # Extrair isosurface
-        iso_value = self.iso_value * density.max()
+        # O iso_value já está normalizado entre 0 e 1 pela interface
+        iso_val = self.iso_value
         
         try:
-            mesh = grid.contour(
-                isosurfaces=[iso_value],
-                scalars='density'
-            )
+            # 1. Extrair malha da Fase Positiva
+            mesh_pos = grid.contour(isosurfaces=[iso_val], scalars='wave')
+            if mesh_pos.n_cells > 0:
+                mesh_pos = mesh_pos.smooth(n_iter=30, relaxation_factor=0.3)
+                mesh_pos.compute_normals(inplace=True)
             
-            if mesh.n_cells == 0:
-                print(f"⚠ Isosurface vazia para orbital {orbital.name}")
-                return self._empty_mesh()
+            # 2. Extrair malha da Fase Negativa
+            mesh_neg = grid.contour(isosurfaces=[-iso_val], scalars='wave')
+            if mesh_neg.n_cells > 0:
+                mesh_neg = mesh_neg.smooth(n_iter=30, relaxation_factor=0.3)
+                mesh_neg.compute_normals(inplace=True)
             
-            mesh.compute_normals(inplace=True)
-            return mesh
+            # Retorna uma tupla contendo as duas malhas
+            return (mesh_pos, mesh_neg)
         
         except Exception as e:
             print(f"⚠ Erro ao gerar isosurface: {e}")

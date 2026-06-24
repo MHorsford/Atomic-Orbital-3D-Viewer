@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from orbitals.wavefunction import HydrogenWavefunction
 from orbitals.orbital_types import get_orbital_type, get_orbital_name, get_default_color
+import numpy as np
 # ===================================================================
 
 class Orbital:
@@ -69,8 +70,8 @@ class Orbital:
             self.X = self.Y = self.Z = None
 
     def calculate_density(self, size: int = 80, range_max: float = 8.0) -> None:
-        """Calcula e armazena a densidade de probabilidade 3D"""
-        density, X, Y, Z = self.wavefunction.evaluate_on_grid(
+        """Calcula e armazena a amplitude da função de onda 3D (fases)"""
+        wave_data, X, Y, Z = self.wavefunction.evaluate_on_grid(
             n=self.n,
             l=self.l,
             m=self.m,
@@ -78,7 +79,12 @@ class Orbital:
             size=size,
             range_max=range_max
         )
-        self.density_grid = density / (density.max() + 1e-10)  # Normaliza
+        
+        # Normaliza usando o valor ABSOLUTO máximo.
+        # Isso garante que a fase positiva vá até +1.0 e a negativa até -1.0
+        max_amplitude = np.max(np.abs(wave_data)) + 1e-10
+        self.density_grid = wave_data / max_amplitude 
+        
         self.X = X
         self.Y = Y
         self.Z = Z

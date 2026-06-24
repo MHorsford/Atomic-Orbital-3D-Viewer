@@ -1,7 +1,7 @@
 """
 orbitals/orbital_types.py
 
-Configurações e metadados dos tipos de orbitais (s, p, d, f).
+Configurações e metadados dos tipos de orbitais (s, p, d, f, g, h, i).
 Este arquivo serve como referência central para características 
 comuns de cada tipo de orbital.
 """
@@ -16,7 +16,7 @@ from typing import Dict, Tuple
 
 @dataclass
 class OrbitalType:
-    """Representa as características de um tipo de orbital (s, p, d, f)"""
+    """Representa as características de um tipo de orbital (s, p, d, f, ...)"""
     letter: str
     max_electrons: int
     degeneracy: int          # quantidade de orbitais 
@@ -53,17 +53,51 @@ ORBITAL_TYPES: Dict[int, OrbitalType] = {
         degeneracy=7,
         default_color=(0.2, 1.0, 0.4),      # Verde
         description="Orbitais muito complexos com múltiplos lobos"
-    )
+    ),
+    # ─── NOVOS TIPOS (para n >= 4) ───
+    4: OrbitalType(  # g
+        letter="g",
+        max_electrons=18,
+        degeneracy=9,
+        default_color=(1.0, 0.8, 0.0),      # Amarelo dourado
+        description="Orbitais com 8 lobos ou formas anelares complexas"
+    ),
+    5: OrbitalType(  # h
+        letter="h",
+        max_electrons=22,
+        degeneracy=11,
+        default_color=(1.0, 0.5, 0.0),      # Laranja escuro / terracota
+        description="Orbitais de altíssima energia com geometrias exóticas (h)"
+    ),
+    6: OrbitalType(  # i
+        letter="i",
+        max_electrons=26,
+        degeneracy=13,
+        default_color=(0.0, 1.0, 1.0),      # Ciano
+        description="Orbitais superiores (i) — raramente ocupados na prática"
+    ),
 }
 
 
 def get_orbital_type(l: int) -> OrbitalType:
     """Retorna as informações do tipo de orbital baseado no número quântico l"""
-    return ORBITAL_TYPES.get(l, ORBITAL_TYPES[0])
+    # Se l for maior que o máximo definido, retorna o último (i) como fallback
+    if l in ORBITAL_TYPES:
+        return ORBITAL_TYPES[l]
+    else:
+        # Fallback seguro: retorna o tipo 'i' (l=6) com valores genéricos
+        print(f"⚠ Aviso: l={l} não definido, usando fallback genérico.")
+        return OrbitalType(
+            letter="?",
+            max_electrons=2*(2*l+1),
+            degeneracy=2*l+1,
+            default_color=(0.5, 0.5, 0.5),
+            description=f"Orbital desconhecido (l={l})"
+        )
 
 
 def get_orbital_name(n: int, l: int) -> str:
-    """Retorna o nome padrão do orbital (ex: 1s, 2p, 3d)"""
+    """Retorna o nome padrão do orbital (ex: 1s, 2p, 3d, 5g)"""
     letter = get_orbital_type(l).letter
     return f"{n}{letter}"
 

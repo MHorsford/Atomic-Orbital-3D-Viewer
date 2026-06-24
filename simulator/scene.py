@@ -6,76 +6,63 @@ Responsável pela câmera, iluminação, e adição/remoção de objetos 3D.
 """
 import sys
 import os
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import numpy as np
 import pyvista as pv
 from config import (
-    WINDOW_WIDTH, WINDOW_HEIGHT, BG_COLOR,
+    WINDOW_WIDTH, WINDOW_HEIGHT, BG_COLOR, BG_COLOR_HQ,
     SHOW_AXES, SHOW_NUCLEUS, CAMERA_INITIAL_POSITION, CAMERA_FOCAL_POINT,
-    COLOR_NUCLEUS, AMBIENT_LIGHT_INTENSITY, DIRECTIONAL_LIGHT_INTENSITY
+    COLOR_NUCLEUS, METALLIC, ROUGHNESS, SPECULAR, SPECULAR_POWER
 )
 
 
 class Scene:
-    """
-    Encapsula o PyVista Plotter e gerencia a cena 3D.
-    """
-    
-    def __init__(self, title: str = "Atomic Orbital Simulator"):
-        """
-        Parâmetros:
-            title : título da janela
-        """
-        # Criar plotter
+    def __init__(self, title: str = "Atomic Orbital Simulator", high_quality: bool = True):
+        self.high_quality = high_quality
+        self.metallic = METALLIC
+        self.roughness = ROUGHNESS
+        self.specular = SPECULAR
+        self.specular_power = SPECULAR_POWER
+
         self.plotter = pv.Plotter(
             window_size=(WINDOW_WIDTH, WINDOW_HEIGHT),
             title=title,
             off_screen=False
         )
-        
-        # Configurar cor de fundo
-        self.plotter.background_color = BG_COLOR
-        
-        # Armazenar referências dos objetos na cena
-        self.actors = {}  # {name: actor}
-        self.orbital_meshes = {}  # {orbital_id: mesh}
-        
-        # Configurar câmera e iluminação
+
+        # Fundo: preto se alta qualidade, senão azul escuro
+        if self.high_quality:
+            self.plotter.background_color = BG_COLOR_HQ
+        else:
+            self.plotter.background_color = BG_COLOR
+
+        self.actors = {}
+        self.orbital_meshes = {}
+
         self._setup_camera()
-        self._setup_lighting()
-        
-        # Adicionar eixos se configurado
+        # SEMPRE usa o sistema de 3 luzes (não precisamos de custom)
+        self.plotter.enable_3_lights()
+
         if SHOW_AXES:
             self._add_axes()
-        
-        # Adicionar núcleo (esfera central) se configurado
         if SHOW_NUCLEUS:
             self._add_nucleus_sphere()
-    
-    def _setup_camera(self) -> None:
-        """Configura a câmera inicial."""
+
+    def _setup_camera(self):
         self.plotter.camera.position = CAMERA_INITIAL_POSITION
         self.plotter.camera.focal_point = CAMERA_FOCAL_POINT
-        self.plotter.camera.up = (0, 0, 1)  # Eixo Z aponta para cima
-        self.plotter.camera.zoom(0.8)  # Zoom inicial
-    
-    def _setup_lighting(self) -> None:
-        """Configura iluminação ambient e direcional."""
-        # Usar o kit de iluminação padrão do PyVista (3 luzes)
-        self.plotter.enable_3_lights()
-    
-    def _add_axes(self) -> None:
-        """Adiciona eixos de coordenadas à cena."""
+        self.plotter.camera.up = (0, 0, 1)
+        self.plotter.camera.zoom(0.8)
+
+    def _add_axes(self):
         self.plotter.add_axes(
             xlabel='X', ylabel='Y', zlabel='Z',
             x_color='red', y_color='green', z_color='blue'
         )
-    
-    def _add_nucleus_sphere(self) -> None:
-        """Adiciona uma esfera dourada no centro representando o núcleo."""
-        nucleus = pv.Sphere(radius=0.2, center=[0, 0, 0], theta_resolution=20, phi_resolution=20)
+
+    def _add_nucleus_sphere(self):
+        nucleus = pv.Sphere(radius=0.2, center=[0,0,0], theta_resolution=20, phi_resolution=20)
         self.plotter.add_mesh(
             nucleus,
             color=COLOR_NUCLEUS,
@@ -84,124 +71,119 @@ class Scene:
             label='Núcleo'
         )
         self.actors['nucleus'] = nucleus
-    
-    def add_orbital_mesh(self, mesh, orbital_id: str, color, opacity: float = 0.8):
-        """
-        Adiciona uma malha 3D de orbital à cena.
-        
-        Parâmetros:
-            mesh       : pyvista.PolyData ou similar
-            orbital_id : identificador único (ex: "1s", "2p_z")
-            color      : cor (RGB tupla ou nome)
-            opacity    : opacidade [0, 1]
-        """
-        actor = self.plotter.add_mesh(
-            mesh,
-            color=color,
-            opacity=opacity,
-            show_edges=False,
-            smooth_shading=True
-        )
-        
-        self.orbital_meshes[orbital_id] = {
-            'mesh': mesh,
-            'actor': actor,
-            'color': color,
-            'opacity': opacity
-        }
-    
+
+
+    def set_high_quality(self, high: bool):
+        """Alterna entre modos normal e de alta qualidade."""
+        from config import BG_COLOR, BG_COLOR_HQ
+        self.high_quality = high
+        self.plotter.background_color = BG_COLOR_HQ if high else BG_COLOR
+        # A iluminação não muda, mas forçamos redesenho
+        self.plotter.render()
+
+    # ─── MÉTODOS ADICIONAIS (mantidos do seu arquivo original) ───
+
     def update_orbital_mesh(self, orbital_id: str, mesh, color=None, opacity=None):
-        """
-        Atualiza uma malha de orbital já existente na cena.
-        
-        Parâmetros:
-            orbital_id : identificador do orbital
-            mesh       : nova malha
-            color      : nova cor (None = manter)
-            opacity    : nova opacidade (None = manter)
-        """
+        """Atualiza uma malha de orbital já existente na cena."""
         if orbital_id not in self.orbital_meshes:
             print(f"⚠ Orbital {orbital_id} não encontrado na cena")
             return
-        
         old_data = self.orbital_meshes[orbital_id]
-        
-        # Usar valores antigos se novos não fornecidos
         color = color or old_data['color']
         opacity = opacity if opacity is not None else old_data['opacity']
-        
-        # Remover malha antiga
         self.plotter.remove_actor(old_data['actor'])
-        
-        # Adicionar malha nova
         self.add_orbital_mesh(mesh, orbital_id, color, opacity)
-    
+
+    def add_orbital_mesh(self, mesh_data, orbital_id: str, color, opacity: float = 0.8, **kwargs):
+        extra_kwargs = {
+            'smooth_shading': True,
+            'show_edges': False,
+        }
+        if self.high_quality:
+            extra_kwargs.update({
+                'pbr': True,
+                'metallic': self.metallic,
+                'roughness': self.roughness,
+                'specular': self.specular,
+                'specular_power': self.specular_power,
+            })
+        extra_kwargs.update(kwargs)
+
+        # Se recebermos duas malhas (isossuperfície com fases)
+        if isinstance(mesh_data, tuple) and len(mesh_data) == 2:
+            mesh_pos, mesh_neg = mesh_data
+            
+            actor_pos = None
+            if mesh_pos.n_cells > 0:
+                # Cor principal para a fase positiva
+                actor_pos = self.plotter.add_mesh(mesh_pos, color=color, opacity=opacity, **extra_kwargs)
+            
+            actor_neg = None
+            if mesh_neg.n_cells > 0:
+                # Prata/Branco para a fase negativa
+                actor_neg = self.plotter.add_mesh(mesh_neg, color='white', opacity=opacity, **extra_kwargs)
+                
+            self.orbital_meshes[orbital_id] = {
+                'mesh': mesh_data,
+                'actor': (actor_pos, actor_neg), # Salva como tupla
+                'color': color,
+                'opacity': opacity
+            }
+        else:
+            # Fallback para os modos volume ou points (malha única)
+            actor = self.plotter.add_mesh(mesh_data, color=color, opacity=opacity, **extra_kwargs)
+            self.orbital_meshes[orbital_id] = {
+                'mesh': mesh_data,
+                'actor': actor,
+                'color': color,
+                'opacity': opacity
+            }
+
     def remove_orbital_mesh(self, orbital_id: str):
-        """
-        Remove uma malha de orbital da cena.
-        
-        Parâmetros:
-            orbital_id : identificador do orbital
-        """
         if orbital_id not in self.orbital_meshes:
             return
         
         data = self.orbital_meshes[orbital_id]
-        self.plotter.remove_actor(data['actor'])
+        actors = data['actor']
+        
+        # Limpar múltiplos atores se for uma tupla
+        if isinstance(actors, tuple):
+            for act in actors:
+                if act is not None:
+                    self.plotter.remove_actor(act)
+        else:
+            if actors is not None:
+                self.plotter.remove_actor(actors)
+                
         del self.orbital_meshes[orbital_id]
-    
+
     def clear_orbital_meshes(self):
-        """Remove todas as malhas de orbitais (mantém núcleo e eixos)."""
         for orbital_id in list(self.orbital_meshes.keys()):
             self.remove_orbital_mesh(orbital_id)
-    
+
     def set_camera_position(self, position, focal_point=None):
-        """
-        Define a posição da câmera.
-        
-        Parâmetros:
-            position    : tupla (x, y, z)
-            focal_point : tupla (x, y, z) ou None para manter
-        """
         self.plotter.camera.position = position
         if focal_point is not None:
             self.plotter.camera.focal_point = focal_point
-    
+
     def get_camera_position(self):
-        """Retorna a posição atual da câmera."""
         return self.plotter.camera.position
-    
+
     def reset_camera(self):
-        """Reseta a câmera para posição inicial."""
         self.set_camera_position(CAMERA_INITIAL_POSITION, CAMERA_FOCAL_POINT)
-    
+
     def set_background_color(self, color):
-        """
-        Define a cor de fundo.
-        
-        Parâmetros:
-            color : tupla RGB (0-1) ou string
-        """
         self.plotter.background_color = color
-    
+
     def show(self):
-        """Inicia o loop de renderização interativo."""
         self.plotter.show()
-    
+
     def close(self):
-        """Fecha a janela."""
         self.plotter.close()
-    
+
     def update(self):
-        """Atualiza a cena (redraw)."""
         self.plotter.render()
-    
+
     def screenshot(self, filename: str = "screenshot.png"):
-        """
-        Captura uma screenshot da cena.
-        
-        Parâmetros:
-            filename : nome do arquivo de saída
-        """
         self.plotter.screenshot(filename)
         print(f"✓ Screenshot salva em {filename}")

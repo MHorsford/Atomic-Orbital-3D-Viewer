@@ -154,12 +154,12 @@ def slater_effective_charge(Z: int, n: int, l: int) -> float:
         if l == 0 or l == 1:
             if ni == n:
                 if li == 0 or li == 1:
-                    # Mesmo grupo (ns, np)
-                    sigma += count * 0.35
+                    # Correção específica para o orbital 1s
+                    if n == 1:
+                        sigma += count * 0.30
+                    else:
+                        sigma += count * 0.35
                 else:
-                    # Orbitais d ou f do MESMO nível n (ex: alvo em 4s, elétron em 3d? Não, 3d tem ni=3)
-                    # Se houver elétrons em nd ou nf na mesma camada n, eles agem como elétrons externos
-                    # Na regra de Slater, nd/nf ficam à direita de (ns, np), logo NÃO blindam.
                     continue
             elif ni == n - 1:
                 # Todos os elétrons da camada n-1 (s, p, d, f) blindam 0.85
