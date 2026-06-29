@@ -31,7 +31,7 @@ BG_COLOR_HQ = 'black'
 
 GRID_SIZE = 120              # Pontos por dimensão para calcular densidade
 GRID_RANGE = 20.0            # Extensão da caixa em unidades de Bohr (±8 a.u.)
-ISO_VALUE = 0.03            # Isosurface: |ψ|² = 2% do máximo (0.05 p 0.08)
+ISO_VALUE = 0.01            # Isosurface: |ψ|² = 2% do máximo (0.05 p 0.08)
 
 # Modo de renderização padrão: 'isosurface', 'volume', 'points'
 RENDER_MODE = 'isosurface'

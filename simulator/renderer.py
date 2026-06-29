@@ -23,7 +23,7 @@ class Renderer:
     Responsável por converter dados de orbital em geometria 3D (PyVista).
     """
     
-    def __init__(self):
+    def __init__(self, config=None):
         """Inicializa o renderizador."""
         self.mode = 'isosurface'  # 'isosurface', 'volume', 'points'
         self.iso_value = ISO_VALUE
@@ -33,6 +33,10 @@ class Renderer:
         self.roughness = ROUGHNESS
         self.specular = SPECULAR
         self.specular_power = SPECULAR_POWER
+        self.config = config
+        # Fator em relação ao valor máximo absoluto do orbital (|ψ| máx)
+        # 0.1 a 0.2 é um bom padrão para o valor de contorno de ψ
+        self.relative_iso_factor = 0.15 
     
     def set_mode(self, mode: str):
         """
@@ -52,51 +56,73 @@ class Renderer:
     # ─────────────────────────────────────────────────────────────────────
     
     def render_isosurface(self, orbital):
-        """
-        Renderiza um orbital extraindo duas isossuperfícies (fases positiva e negativa).
-        """
-        # A função get_density agora retorna a amplitude da onda (graças à alteração anterior)
-        wave, X, Y, Z = orbital.get_density(self.grid_size, self.grid_range)
-        
-        # Criar grid ImageData
+        # 🔥 NOVO: Define o espaço (range) dinamicamente baseado no nível quântico 'n'
+        # Isso impede que orbitais de níveis altos (n>=4) sejam enjaulados e cortados reto.
+        n = orbital.n
+        if n <= 2:
+            range_max = 12.0
+        elif n == 3:
+            range_max = 28.0
+        elif n == 4:
+            range_max = 55.0
+        else:
+            range_max = 95.0  # Para n >= 5
+
+        # 1. Obtém os dados da função de onda usando o range calculado sob medida
+        wave, X, Y, Z = orbital.get_density(self.grid_size, range_max)
+
+        # 2. Inicializa o ImageData do PyVista
         grid = pv.ImageData()
         grid.dimensions = wave.shape
-        
-        # Definir origem e espaçamento
+
         x_min, x_max = X.min(), X.max()
         y_min, y_max = Y.min(), Y.max()
         z_min, z_max = Z.min(), Z.max()
-        
+
         grid.origin = (x_min, y_min, z_min)
         grid.spacing = (
             (x_max - x_min) / (wave.shape[0] - 1) if wave.shape[0] > 1 else 1.0,
             (y_max - y_min) / (wave.shape[1] - 1) if wave.shape[1] > 1 else 1.0,
-            (z_max - z_min) / (wave.shape[2] - 1) if wave.shape[2] > 1 else 1.0
+            (z_max - z_min) / (wave.shape[2] - 1) if wave.shape[2] > 1 else 1.0,
         )
-        grid['wave'] = wave.flatten(order='F')
-        
-        # O iso_value já está normalizado entre 0 e 1 pela interface
-        iso_val = self.iso_value
-        
+
+        # 3. Normalização pelo Máximo Absoluto (Isso resolve a inconsistência do ISO!)
+        wave_max = np.max(np.abs(wave))
+        if wave_max > 1e-12:
+            wave_norm = wave / wave_max
+        else:
+            wave_norm = wave
+            
+        # ATENÇÃO: Use achatamento em ordem Fortran ('F') para alinhar com a convenção do PyVista
+        grid['wave'] = wave_norm.flatten(order='F')
+
+        # Agora o self.iso_value do seu slider deve operar entre 0.01 e 0.50 (fração do máximo)
+        iso_val = self.iso_value  
+
+        mesh_pos, mesh_neg = None, None
+
         try:
-            # 1. Extrair malha da Fase Positiva
-            mesh_pos = grid.contour(isosurfaces=[iso_val], scalars='wave')
-            if mesh_pos.n_cells > 0:
-                mesh_pos = mesh_pos.smooth(n_iter=30, relaxation_factor=0.3)
+            # --- FASE POSITIVA ---
+            contour_pos = grid.contour(isosurfaces=[iso_val], scalars='wave')
+            # Correção PyVista: Sempre verifique n_points antes de manipular a malha
+            if contour_pos.n_points > 0:
+                mesh_pos = contour_pos.smooth(n_iter=30, relaxation_factor=0.3)
                 mesh_pos.compute_normals(inplace=True)
-            
-            # 2. Extrair malha da Fase Negativa
-            mesh_neg = grid.contour(isosurfaces=[-iso_val], scalars='wave')
-            if mesh_neg.n_cells > 0:
-                mesh_neg = mesh_neg.smooth(n_iter=30, relaxation_factor=0.3)
+
+            # --- FASE NEGATIVA ---
+            contour_neg = grid.contour(isosurfaces=[-iso_val], scalars='wave')
+            if contour_neg.n_points > 0:
+                mesh_neg = contour_neg.smooth(n_iter=30, relaxation_factor=0.3)
                 mesh_neg.compute_normals(inplace=True)
-            
-            # Retorna uma tupla contendo as duas malhas
+
             return (mesh_pos, mesh_neg)
-        
+
         except Exception as e:
-            print(f"⚠ Erro ao gerar isosurface: {e}")
-            return self._empty_mesh()
+            print(f"⚠ Erro controlado ao gerar isosurface: {e}")
+            # Em vez de quebrar a UI, retorna None para o Plotter apenas ignorar a renderização temporariamente
+            return (None, None)
+
+
     
     # ─────────────────────────────────────────────────────────────────────
     # MODO: VOLUME (VOLUMETRIC)

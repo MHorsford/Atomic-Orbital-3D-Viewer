@@ -210,32 +210,31 @@ class OrbitalExplorer(QMainWindow):
     # CALLBACKS DOS SLIDERS
     # ─────────────────────────────────────────────────────────────────────
     
+
     def on_element_changed(self, index):
         """Quando muda o elemento."""
         Z = self.combo_element.currentData()
         from atom.atom import Atom
         self.simulator.atom = Atom(Z=Z)
+        
+        # 1. Se o seu update_limits mexer no slider 'n', ele vai disparar on_n_changed automaticamente.
+        # Se ele não mexer no slider 'n', nós forçamos a validação da cadeia manualmente aqui:
         self.update_limits()
-        self.on_render_clicked()
+        self.on_n_changed() 
 
-    def on_quality_toggled(self, state):
-        """Alterna entre renderização normal e de alta qualidade."""
-        high = (state == Qt.Checked)
-        self.simulator.set_high_quality(high)
-        self.on_render_clicked()   # re-renderiza para ver a diferença
-    
     def on_n_changed(self):
         """Quando muda o nível quântico n."""
         n = self.slider_n.value()
         self.label_n.setText(f"n = {n}")
         
-        # 🔥 NOVO: Limitar l dinamicamente baseado em n
+        # Limitar l dinamicamente baseado em n
         max_l = n - 1
         self.slider_l.setMaximum(max_l)
         if self.slider_l.value() > max_l:
             self.slider_l.setValue(max_l)
         
-        self.schedule_update()
+        # Apenas chama o próximo da cadeia de validação
+        self.on_l_changed()
     
     def on_l_changed(self):
         """Quando muda o tipo orbital l."""
@@ -245,18 +244,34 @@ class OrbitalExplorer(QMainWindow):
         orbital_type = get_orbital_type(l)
         self.label_l.setText(f"l = {l} ({orbital_type.letter})")
         
-        # Limitar m
+        # 🔥 REMOVIDO: Tiramos os métodos self.slider_iso.setValue() 
+        # que causavam o erro de float/int e derrubavam a UI.
+        
+        # Limitar m dinamicamente baseado em l
         self.slider_m.setRange(-l, l)
         if abs(self.slider_m.value()) > l:
             self.slider_m.setValue(0)
         
-        self.schedule_update()
+        # Finaliza a cadeia de atualização com segurança
+        self.on_m_changed()
+
     
     def on_m_changed(self):
         """Quando muda a orientação m."""
         m = self.slider_m.value()
         self.label_m.setText(f"m = {m:+d}")
+        
+        # Agora que n, l e m estão 100% validados e em harmonia, agenda o cálculo seguro
         self.schedule_update()
+
+
+    def on_quality_toggled(self, state):
+        """Alterna entre renderização normal e de alta qualidade."""
+        high = (state == Qt.Checked)
+        self.simulator.set_high_quality(high)
+        self.on_render_clicked()   # re-renderiza para ver a diferença
+    
+
     
     def on_mode_changed(self, mode):
         """Quando muda o modo de renderização."""

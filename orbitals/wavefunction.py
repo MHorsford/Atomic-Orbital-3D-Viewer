@@ -143,7 +143,7 @@ class HydrogenWavefunction:
     # MÉTODOS PARA VISUALIZAÇÃO 3D
     # ============================
     
-    def generate_grid(self, size=80, range_max=8.0):
+    def generate_grid(self, size=80, range_max=15.0):
         """
         Cria grid 3D cartesiano e converte para coordenadas esféricas
         """
@@ -164,7 +164,7 @@ class HydrogenWavefunction:
         return X, Y, Z, R, Theta, Phi
     
 
-    def evaluate_on_grid(self, n, l, m, Z=1, size=80, range_max=8.0):
+    def evaluate_on_grid(self, n, l, m, Z=1, size=80, range_max=15.0):
         """
         Avalia a amplitude da função de onda (ψ) em todo o grid 3D.
         Agora usa harmônicos esféricos REAIS para todos os orbitais.

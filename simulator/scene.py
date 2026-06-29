@@ -109,17 +109,19 @@ class Scene:
             })
         extra_kwargs.update(kwargs)
 
-        # Se recebermos duas malhas (isossuperfície com fases)
+                # Se recebermos duas malhas (isossuperfície com fases)
         if isinstance(mesh_data, tuple) and len(mesh_data) == 2:
             mesh_pos, mesh_neg = mesh_data
             
             actor_pos = None
-            if mesh_pos.n_cells > 0:
+            # 🔥 CORREÇÃO: Garante que a malha existe antes de ler n_cells ou n_points
+            if mesh_pos is not None and mesh_pos.n_points > 0:
                 # Cor principal para a fase positiva
                 actor_pos = self.plotter.add_mesh(mesh_pos, color=color, opacity=opacity, **extra_kwargs)
             
             actor_neg = None
-            if mesh_neg.n_cells > 0:
+            # 🔥 CORREÇÃO: Garante que a malha existe antes de ler n_cells ou n_points
+            if mesh_neg is not None and mesh_neg.n_points > 0:
                 # Prata/Branco para a fase negativa
                 actor_neg = self.plotter.add_mesh(mesh_neg, color='white', opacity=opacity, **extra_kwargs)
                 
@@ -129,15 +131,7 @@ class Scene:
                 'color': color,
                 'opacity': opacity
             }
-        else:
-            # Fallback para os modos volume ou points (malha única)
-            actor = self.plotter.add_mesh(mesh_data, color=color, opacity=opacity, **extra_kwargs)
-            self.orbital_meshes[orbital_id] = {
-                'mesh': mesh_data,
-                'actor': actor,
-                'color': color,
-                'opacity': opacity
-            }
+
 
     def remove_orbital_mesh(self, orbital_id: str):
         if orbital_id not in self.orbital_meshes:
