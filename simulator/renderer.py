@@ -2,7 +2,7 @@
 simulator/renderer.py
 
 Classe Renderer — converte orbitais em malhas 3D para renderização.
-Suporta 3 modos: isosurface, volume (volumetric), points (nuvem).
+Suporta 3 modos: isosurface, grid_points (grade densa), points (nuvem Monte Carlo).
 """
 import sys
 import os
@@ -13,9 +13,10 @@ import numpy as np
 import pyvista as pv
 from config import ISO_VALUE, GRID_SIZE, GRID_RANGE, NUM_POINTS_CLOUD
 from config import HIGH_QUALITY_RENDER, METALLIC, ROUGHNESS, SPECULAR, SPECULAR_POWER
-from utils.grid import make_grid, normalize_array
+from utils.grid import make_grid, normalize_array, cartesian_to_spherical
 from utils.sampling import sample_orbital_grid
 from utils.helpers import quantum_label
+from orbitals.wavefunction import HydrogenWavefunction
 
 
 class Renderer:
@@ -25,7 +26,7 @@ class Renderer:
     
     def __init__(self, config=None):
         """Inicializa o renderizador."""
-        self.mode = 'isosurface'  # 'isosurface', 'volume', 'points'
+        self.mode = 'isosurface'  # 'isosurface', 'grid_points', 'points'
         self.iso_value = ISO_VALUE
         self.grid_size = GRID_SIZE
         self.grid_range = GRID_RANGE
@@ -43,9 +44,9 @@ class Renderer:
         Define o modo de renderização.
         
         Parâmetros:
-            mode : 'isosurface', 'volume', ou 'points'
+            mode : 'isosurface', 'grid_points', ou 'points'
         """
-        if mode not in ['isosurface', 'volume', 'points']:
+        if mode not in ['isosurface', 'grid_points', 'points']:
             print(f"⚠ Modo desconhecido: {mode}. Mantendo: {self.mode}")
             return
         self.mode = mode
@@ -56,23 +57,30 @@ class Renderer:
     # ─────────────────────────────────────────────────────────────────────
     
     def render_isosurface(self, orbital):
-        # 🔥 NOVO: Define o espaço (range) dinamicamente baseado no nível quântico 'n'
-        # Isso impede que orbitais de níveis altos (n>=4) sejam enjaulados e cortados reto.
         n = orbital.n
+        range_max = self._get_range_for_n(n)
+
+        # Ajuste de resolução dinâmica
         if n <= 2:
-            range_max = 12.0
+            current_grid_size = self.grid_size
         elif n == 3:
-            range_max = 28.0
+            current_grid_size = int(self.grid_size * 0.9)
         elif n == 4:
-            range_max = 55.0
+            current_grid_size = int(self.grid_size * 0.75)
         else:
-            range_max = 95.0  # Para n >= 5
+            current_grid_size = int(self.grid_size * 0.6)
 
-        # 1. Obtém os dados da função de onda usando o range calculado sob medida
-        wave, X, Y, Z = orbital.get_density(self.grid_size, range_max)
+        current_grid_size = max(current_grid_size, 80)
 
-        # 2. Inicializa o ImageData do PyVista
+        wave, X, Y, Z = orbital.get_density(current_grid_size, range_max)
+
+        wave_max = np.max(np.abs(wave))
+        if not np.isfinite(wave_max) or wave_max < 1e-15:
+            print(f"⚠ Orbital com amplitude inválida")
+            return (None, None)
+
         grid = pv.ImageData()
+        # IMPORTANTE: Garanta que as dimensões casem com a ordem Fortran 'F'
         grid.dimensions = wave.shape
 
         x_min, x_max = X.min(), X.max()
@@ -86,78 +94,69 @@ class Renderer:
             (z_max - z_min) / (wave.shape[2] - 1) if wave.shape[2] > 1 else 1.0,
         )
 
-        # 3. Normalização pelo Máximo Absoluto (Isso resolve a inconsistência do ISO!)
-        wave_max = np.max(np.abs(wave))
         if wave_max > 1e-12:
             wave_norm = wave / wave_max
         else:
             wave_norm = wave
-            
-        # ATENÇÃO: Use achatamento em ordem Fortran ('F') para alinhar com a convenção do PyVista
+
+        # CORREÇÃO 2: PyVista exige obrigatoriamente order='F' para mapear os eixos corretamente
         grid['wave'] = wave_norm.flatten(order='F')
 
-        # Agora o self.iso_value do seu slider deve operar entre 0.01 e 0.50 (fração do máximo)
-        iso_val = self.iso_value  
-
+        # CORREÇÃO 1: Isosuperfície adaptativa baseada na interface + fator relativo
+        # Se self.iso_value for muito pequeno no slider, usamos o fator dinâmico baseado no pico do orbital
+        iso_val = self.iso_value if self.iso_value > 0.05 else self.relative_iso_factor
+        
         mesh_pos, mesh_neg = None, None
 
         try:
-            # --- FASE POSITIVA ---
             contour_pos = grid.contour(isosurfaces=[iso_val], scalars='wave')
-            # Correção PyVista: Sempre verifique n_points antes de manipular a malha
             if contour_pos.n_points > 0:
-                mesh_pos = contour_pos.smooth(n_iter=30, relaxation_factor=0.3)
+                mesh_pos = contour_pos.smooth(n_iter=80, relaxation_factor=0.2)
                 mesh_pos.compute_normals(inplace=True)
 
-            # --- FASE NEGATIVA ---
             contour_neg = grid.contour(isosurfaces=[-iso_val], scalars='wave')
             if contour_neg.n_points > 0:
-                mesh_neg = contour_neg.smooth(n_iter=30, relaxation_factor=0.3)
+                mesh_neg = contour_neg.smooth(n_iter=80, relaxation_factor=0.2)
                 mesh_neg.compute_normals(inplace=True)
 
             return (mesh_pos, mesh_neg)
 
         except Exception as e:
             print(f"⚠ Erro controlado ao gerar isosurface: {e}")
-            # Em vez de quebrar a UI, retorna None para o Plotter apenas ignorar a renderização temporariamente
             return (None, None)
 
-
-    
     # ─────────────────────────────────────────────────────────────────────
     # MODO: VOLUME (VOLUMETRIC)
     # ─────────────────────────────────────────────────────────────────────
-    
-    def render_volume(self, orbital):
+
+    def render_grid_points(self, orbital):
         """
-        Renderiza um orbital como nuvem volumétrica (raycasting).
-        
-        Para isso, retornamos uma point cloud densa com cores proporcionais à densidade.
-        
-        Parâmetros:
-            orbital : objeto Orbital
-        
-        Retorna:
-            pyvista.PolyData com pontos coloridos
+        Renderiza um orbital como uma nuvem de pontos densa filtrada.
         """
-        # Calcular densidade
-        density, X, Y, Z = orbital.get_density(self.grid_size // 2, self.grid_range)
+        n = orbital.n
+        range_max = self._get_range_for_n(n)
+
+        density, X, Y, Z = orbital.get_density(self.grid_size // 2, range_max)
         
-        # Criar grid de pontos
+        # CORREÇÃO 3: Filtrar pontos com densidade praticamente nula 
+        # Isso impede que o orbital vire um bloco/cubo opaco de pontos vazios
+        dens_flat = density.flatten()
+        max_dens = np.max(dens_flat)
+        
+        # Mantém apenas pontos com mais de 0.5% da densidade máxima
+        threshold = max_dens * 0.005 if max_dens > 1e-15 else 1e-15
+        mask = dens_flat > threshold
+        
         points = np.column_stack([X.flatten(), Y.flatten(), Z.flatten()])
         
-        # Valores de densidade para colorir
-        density_values = density.flatten()
-        
-        # Criar PolyData (point cloud)
-        mesh = pv.PolyData(points)
-        mesh['density'] = density_values
-        
-        # Adicionar células (para não aparecerem como pontos soltos)
-        # Usar vertices para manter como nuvem
-        mesh.point_data['density'] = density_values
-        
+        # Se nenhum ponto passar pelo filtro, retorna malha vazia
+        if not np.any(mask):
+            return self._empty_mesh()
+            
+        mesh = pv.PolyData(points[mask])
+        mesh['density'] = dens_flat[mask]
         return mesh
+
     
     # ─────────────────────────────────────────────────────────────────────
     # MODO: POINT CLOUD (MONTE CARLO)
@@ -175,13 +174,10 @@ class Renderer:
         """
         # Função psi² que retorna valores num ponto (x, y, z)
         def psi_squared_func(x, y, z):
-            from utils.grid import cartesian_to_spherical
-            
             # Converter para esféricas
             r, theta, phi = cartesian_to_spherical(x, y, z)
             
             # Calcular psi²
-            from orbitals.wavefunction import HydrogenWavefunction
             wf = HydrogenWavefunction(use_angstrom=True)
             psi = wf.psi(r, theta, phi, orbital.n, orbital.l, orbital.m, orbital.Z_eff)
             return np.abs(psi) ** 2
@@ -229,8 +225,8 @@ class Renderer:
         """
         if self.mode == 'isosurface':
             return self.render_isosurface(orbital)
-        elif self.mode == 'volume':
-            return self.render_volume(orbital)
+        elif self.mode == 'grid_points':
+            return self.render_grid_points(orbital)
         elif self.mode == 'points':
             return self.render_points(orbital)
         else:
@@ -265,8 +261,8 @@ class Renderer:
         return pv.PolyData()
     
     def set_iso_value(self, iso_value: float):
-        """Define o valor de isosurface."""
-        self.iso_value = max(0.001, min(1.0, iso_value))
+        # Permite valores até 2.0 para capturar orbitais muito difusos
+        self.iso_value = max(0.001, min(2.0, iso_value))
     
     def set_grid_resolution(self, size: int):
         """Define a resolução do grid para cálculo de densidade."""
@@ -275,3 +271,9 @@ class Renderer:
     def set_point_cloud_size(self, n_points: int):
         """Define o número de pontos na nuvem Monte Carlo."""
         self.point_cloud_size = max(1000, min(50000, n_points))
+
+    def _get_range_for_n(self, n):
+        if n <= 2: return 12.0
+        elif n == 3: return 28.0
+        elif n == 4: return 55.0
+        else: return 95.0

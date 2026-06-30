@@ -21,6 +21,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
 
+from simulator.simulator import Simulator
+from simulator.scene import Scene
 from orbitals.orbital import Orbital
 from utils.helpers import quantum_label
 from config import MAX_N, MAX_Z, ISO_VALUE
@@ -140,7 +142,7 @@ class OrbitalExplorer(QMainWindow):
             # Iso value
             layout.addWidget(QLabel("Isosurface Value:"), 5, 0)
             self.slider_iso = QSlider(Qt.Horizontal)
-            self.slider_iso.setRange(1, 100)
+            self.slider_iso.setRange(0, 200)
             
             # Converte o valor do config (ex: 0.12 -> 12)
             initial_iso_slider_val = int(ISO_VALUE * 100)
@@ -210,17 +212,12 @@ class OrbitalExplorer(QMainWindow):
     # CALLBACKS DOS SLIDERS
     # ─────────────────────────────────────────────────────────────────────
     
-
+        
     def on_element_changed(self, index):
-        """Quando muda o elemento."""
         Z = self.combo_element.currentData()
         from atom.atom import Atom
         self.simulator.atom = Atom(Z=Z)
-        
-        # 1. Se o seu update_limits mexer no slider 'n', ele vai disparar on_n_changed automaticamente.
-        # Se ele não mexer no slider 'n', nós forçamos a validação da cadeia manualmente aqui:
-        self.update_limits()
-        self.on_n_changed() 
+        self.update_limits()   # já chama on_render_clicked internamente
 
     def on_n_changed(self):
         """Quando muda o nível quântico n."""
@@ -308,7 +305,7 @@ class OrbitalExplorer(QMainWindow):
             self.slider_l.setValue(l)
         
         # Atualizar iso value
-        iso_val = self.slider_iso.value() / 100.0
+        iso_val = self.slider_iso.value() / 100.0  
         self.label_iso.setText(f"{iso_val:.3f}")
         self.simulator.set_iso_value(iso_val)
         
@@ -349,45 +346,75 @@ class OrbitalExplorer(QMainWindow):
     # ─────────────────────────────────────────────────────────────────────
     
     def visualize_orbital(self, n: int, l: int, m: int = 0):
-        """
-        Renderiza um orbital específico.
-        
-        Parâmetros:
-            n : nível quântico (1, 2, 3, ...)
-            l : tipo orbital (0=s, 1=p, 2=d, 3=f)
-            m : orientação (-l até +l)
-        """
-        # Obter Z_eff do átomo atual
         from physics.screening import slater_effective_charge
         Z_eff = slater_effective_charge(self.simulator.atom.Z, n, l)
-        
-        # Criar orbital temporário
+        if Z_eff is None or Z_eff <= 0:
+            Z_eff = self.simulator.atom.Z - (n - 1)
+            if Z_eff < 0.1:
+                Z_eff = 0.1
+
         orbital = Orbital(n=n, l=l, m=m, electrons=1, Z_eff=Z_eff)
-        
-        # Renderizar
         mesh = self.simulator.renderer.render_orbital(orbital)
-        
-        # Adicionar à cena
         orbital_label = quantum_label(n, l, m)
         self.simulator.scene.clear_orbital_meshes()
         self.simulator.scene.add_orbital_mesh(mesh, orbital_label, orbital.color, 0.8)
         
-        # Atualizar cena
+        # 🔥 Ajusta a câmera para o tamanho do orbital
+        range_max = self.simulator.renderer._get_range_for_n(n)
+        self.simulator.scene.set_camera_for_range(range_max)
+        
         self.simulator.scene.update()
+
     
     def update_limits(self):
-        """Atualiza os limites dos sliders baseado no elemento."""
+        """
+        Versão blindada e inteligente: sugere a camada de valência 
+        sem causar erro de recursão/crash na UI.
+        """
+        if not self.simulator.atom:
+            return
+
+        # 1. BLOQUEIO ESSENCIAL: impede a UI de tentar renderizar no meio da atualização
         self.slider_n.blockSignals(True)
         self.slider_l.blockSignals(True)
         self.slider_m.blockSignals(True)
-        
-        self.slider_n.setValue(1)
-        self.slider_l.setValue(0)
-        self.slider_m.setValue(0)
-        
-        self.slider_n.blockSignals(False)
-        self.slider_l.blockSignals(False)
-        self.slider_m.blockSignals(False)
+
+        try:
+            # 2. LÓGICA DE VALÊNCIA: Encontra o nível n mais externo com elétrons
+            max_n_occupied = max(
+                (orb.n for orb in self.simulator.atom.orbitals if orb.electrons > 0),
+                default=1
+            )
+
+            # Garante que não ultrapasse MAX_N (definido no config)
+            if max_n_occupied > MAX_N:
+                max_n_occupied = MAX_N
+
+            # 3. CONFIGURA N
+            self.slider_n.setValue(max_n_occupied)
+            self.label_n.setText(f"n = {max_n_occupied}")
+
+            # 4. CONFIGURA L (reseta para s)
+            max_l = max_n_occupied - 1
+            self.slider_l.setRange(0, max_l)
+            self.slider_l.setValue(0)
+            from orbitals.orbital_types import get_orbital_type
+            self.label_l.setText(f"l = 0 ({get_orbital_type(0).letter})")
+
+            # 5. CONFIGURA M (reseta para 0)
+            self.slider_m.setRange(0, 0)   # l=0 → m só pode ser 0
+            self.slider_m.setValue(0)
+            self.label_m.setText("m = +0")
+
+        finally:
+            # 6. LIBERAÇÃO: Agora a UI pode voltar a ouvir os comandos do usuário
+            self.slider_n.blockSignals(False)
+            self.slider_l.blockSignals(False)
+            self.slider_m.blockSignals(False)
+
+        # 7. RENDER FINAL: Agora sim, com tudo validado, desenha o orbital na tela
+        self.on_render_clicked()
+
     
     # ─────────────────────────────────────────────────────────────────────
     # ATUALIZAÇÃO DE INFORMAÇÕES

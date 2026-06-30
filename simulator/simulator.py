@@ -103,7 +103,7 @@ class Simulator:
         Muda o modo de renderização.
         
         Parâmetros:
-            mode : 'isosurface', 'volume', ou 'points'
+            mode : 'isosurface', 'grid_points', ou 'points'
         """
         self.renderer.set_mode(mode)
         self.update_atom_display()

@@ -72,13 +72,22 @@ class Scene:
         )
         self.actors['nucleus'] = nucleus
 
-
     def set_high_quality(self, high: bool):
         """Alterna entre modos normal e de alta qualidade."""
         from config import BG_COLOR, BG_COLOR_HQ
         self.high_quality = high
         self.plotter.background_color = BG_COLOR_HQ if high else BG_COLOR
         # A iluminação não muda, mas forçamos redesenho
+        self.plotter.render()
+
+    # ─── MÉTODO NOVO PARA AJUSTAR A CÂMERA ───
+
+    def set_camera_for_range(self, range_max):
+        """Ajusta a câmera para que o orbital caiba na tela."""
+        distance = range_max * 2.5   # fator empírico
+        self.plotter.camera.position = (distance, distance, distance)
+        self.plotter.camera.focal_point = (0, 0, 0)
+        self.plotter.camera.up = (0, 0, 1)
         self.plotter.render()
 
     # ─── MÉTODOS ADICIONAIS (mantidos do seu arquivo original) ───
@@ -109,29 +118,32 @@ class Scene:
             })
         extra_kwargs.update(kwargs)
 
-                # Se recebermos duas malhas (isossuperfície com fases)
+        # Se recebermos duas malhas (isossuperfície com fases)
         if isinstance(mesh_data, tuple) and len(mesh_data) == 2:
             mesh_pos, mesh_neg = mesh_data
             
             actor_pos = None
-            # 🔥 CORREÇÃO: Garante que a malha existe antes de ler n_cells ou n_points
             if mesh_pos is not None and mesh_pos.n_points > 0:
-                # Cor principal para a fase positiva
                 actor_pos = self.plotter.add_mesh(mesh_pos, color=color, opacity=opacity, **extra_kwargs)
             
             actor_neg = None
-            # 🔥 CORREÇÃO: Garante que a malha existe antes de ler n_cells ou n_points
             if mesh_neg is not None and mesh_neg.n_points > 0:
-                # Prata/Branco para a fase negativa
                 actor_neg = self.plotter.add_mesh(mesh_neg, color='white', opacity=opacity, **extra_kwargs)
                 
             self.orbital_meshes[orbital_id] = {
                 'mesh': mesh_data,
-                'actor': (actor_pos, actor_neg), # Salva como tupla
+                'actor': (actor_pos, actor_neg),
                 'color': color,
                 'opacity': opacity
             }
-
+        else:
+            actor = self.plotter.add_mesh(mesh_data, color=color, opacity=opacity, **extra_kwargs)
+            self.orbital_meshes[orbital_id] = {
+                'mesh': mesh_data,
+                'actor': actor,
+                'color': color,
+                'opacity': opacity
+            }
 
     def remove_orbital_mesh(self, orbital_id: str):
         if orbital_id not in self.orbital_meshes:
@@ -140,7 +152,6 @@ class Scene:
         data = self.orbital_meshes[orbital_id]
         actors = data['actor']
         
-        # Limpar múltiplos atores se for uma tupla
         if isinstance(actors, tuple):
             for act in actors:
                 if act is not None:
