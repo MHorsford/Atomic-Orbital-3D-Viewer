@@ -76,6 +76,11 @@ ORBITAL_COLORS = {
     3: (0.2, 1.0, 0.4),      # f → Verde
 }
 
+# Convenção visual das fases da função de onda.
+ORBITAL_NEGATIVE_PHASE_COLOR = (0.95, 0.95, 0.95)
+ORBITAL_EMPTY_POSITIVE_COLOR = (0.20, 0.88, 1.00)  # Ciano luminoso
+ORBITAL_EMPTY_NEGATIVE_COLOR = (1.00, 0.35, 0.78)  # Magenta luminoso
+
 # CENA 3D
 
 # Mostrar eixos de coordenadas?

@@ -13,7 +13,8 @@ import pyvista as pv
 from config import (
     WINDOW_WIDTH, WINDOW_HEIGHT, BG_COLOR, BG_COLOR_HQ,
     SHOW_AXES, SHOW_NUCLEUS, CAMERA_INITIAL_POSITION, CAMERA_FOCAL_POINT,
-    COLOR_NUCLEUS, METALLIC, ROUGHNESS, SPECULAR, SPECULAR_POWER
+    COLOR_NUCLEUS, METALLIC, ROUGHNESS, SPECULAR, SPECULAR_POWER,
+    ORBITAL_NEGATIVE_PHASE_COLOR,
 )
 
 
@@ -123,7 +124,9 @@ class Scene:
         
         self.add_orbital_mesh(mesh, orbital_id, color, opacity)
 
-    def add_orbital_mesh(self, mesh_data, orbital_id: str, color, opacity: float = 0.8, **kwargs):
+    def add_orbital_mesh(
+            self, mesh_data, orbital_id: str, color, opacity: float = 0.8,
+            negative_color=None, **kwargs):
         extra_kwargs = {
             'smooth_shading': True,
             'show_edges': False,
@@ -151,11 +154,15 @@ class Scene:
 
         if isinstance(mesh_data, tuple) and len(mesh_data) == 2:
             mesh_pos, mesh_neg = mesh_data
+            phase_negative_color = negative_color or ORBITAL_NEGATIVE_PHASE_COLOR
             # Nomes estáveis permitem substituir cada fase sem duplicar atores.
             if mesh_pos is not None and mesh_pos.n_points > 0:
                 self.plotter.add_mesh(mesh_pos, color=color, opacity=opacity, name=f"{orbital_id}_pos", **extra_kwargs)
             if mesh_neg is not None and mesh_neg.n_points > 0:
-                self.plotter.add_mesh(mesh_neg, color='white', opacity=opacity, name=f"{orbital_id}_neg", **extra_kwargs)
+                self.plotter.add_mesh(
+                    mesh_neg, color=phase_negative_color,
+                    opacity=opacity, name=f"{orbital_id}_neg", **extra_kwargs
+                )
                 
             self.orbital_meshes[orbital_id] = {'mesh': mesh_data, 'actor': orbital_id, 'color': color, 'opacity': opacity}
         elif _is_point_cloud(mesh_data):

@@ -110,6 +110,15 @@ QLabel#sliceStatus {
     padding: 8px 12px;
 }
 
+QLabel#phaseLegend {
+    color: #d9eaf7;
+    background-color: #0d2030;
+    border: 1px solid #284a61;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 9pt;
+}
+
 QLabel#emptySlice {
     color: #7891a8;
     background-color: #07111f;

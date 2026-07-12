@@ -11,5 +11,10 @@ __pycache__/
 # Virtual Environment
 .venv/
 
+# Pacote
+build/
+dist/
+Orbital Explorer.spec
+
 # Icons
 quantum_icon_256.ico

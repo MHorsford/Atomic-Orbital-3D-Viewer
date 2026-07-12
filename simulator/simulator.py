@@ -13,7 +13,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root))
 
-from config import FPS_TARGET
+from config import FPS_TARGET, ORBITAL_NEGATIVE_PHASE_COLOR
 from simulator.scene import Scene
 from simulator.renderer import Renderer
 from utils.helpers import orbital_info_string, element_info_string
@@ -82,7 +82,10 @@ class Simulator:
                     if mesh_pos:
                         self.scene.add_orbital_mesh(mesh_pos, f"{orbital_id}_pos", color, opacity)
                     if mesh_neg:
-                        self.scene.add_orbital_mesh(mesh_neg, f"{orbital_id}_neg", color, opacity * 0.8)
+                        self.scene.add_orbital_mesh(
+                            mesh_neg, f"{orbital_id}_neg",
+                            ORBITAL_NEGATIVE_PHASE_COLOR, opacity * 0.8,
+                        )
                         
                     self.visible_orbitals[orbital_id] = orbital
                 else:  # outros modos retornam único mesh

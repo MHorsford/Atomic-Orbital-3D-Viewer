@@ -35,7 +35,10 @@ from atom.manual_configuration import ManualElectronConfiguration
 from orbitals.orbital import Orbital
 from ui.app_theme import apply_app_theme
 from utils.helpers import quantum_label
-from config import MAX_N, MAX_Z, ISO_VALUE
+from config import (
+    MAX_N, MAX_Z, ISO_VALUE, ORBITAL_EMPTY_POSITIVE_COLOR,
+    ORBITAL_EMPTY_NEGATIVE_COLOR, ORBITAL_NEGATIVE_PHASE_COLOR,
+)
 import numpy as np
 
 
@@ -310,6 +313,13 @@ class OrbitalExplorer(QMainWindow):
             self.simulator.visible_orbitals.clear()
 
         viewer_3d_layout.addWidget(self.pyvista_widget)
+        self.phase_legend = QLabel()
+        self.phase_legend.setObjectName("phaseLegend")
+        self.phase_legend.setAlignment(Qt.AlignCenter)
+        self.phase_legend.setWordWrap(True)
+        self.phase_legend.setTextFormat(Qt.RichText)
+        viewer_3d_layout.addWidget(self.phase_legend)
+        self.update_phase_legend(multiple=True)
         self.viewer_tabs.addTab(self.viewer_3d_tab, "Visualização 3D")
 
         # O corte ocupa a mesma área nobre do 3D. As duas representações 2D
@@ -743,6 +753,7 @@ class OrbitalExplorer(QMainWindow):
         else:
             self.simulator.update_atom_display()
             self.update_info_filled()
+        self.update_phase_legend(multiple=True)
 
     def on_rules_clicked(self):
         """Abre o diagnóstico visual de Aufbau, Hund e Pauli."""
@@ -902,6 +913,69 @@ class OrbitalExplorer(QMainWindow):
         self.info_tabs.setCurrentWidget(self.text_info)
     
     # RENDERIZAÇÃO DE ORBITAIS
+
+    @staticmethod
+    def _color_to_hex(color):
+        """Converte uma cor RGB normalizada para hexadecimal."""
+        values = [max(0, min(255, round(component * 255))) for component in color]
+        return "#{:02x}{:02x}{:02x}".format(*values[:3])
+
+    def update_phase_legend(self, color=None, electron_count=None, multiple=False):
+        """Explica a convenção de cores da representação 3D atual."""
+        if not hasattr(self, 'phase_legend'):
+            return
+
+        render_mode = self.combo_mode.currentText() if hasattr(self, 'combo_mode') else "isosurface"
+        if electron_count == 0 and self.interaction_mode != "Explorar orbitais":
+            self.phase_legend.setText(
+                "<b>LEGENDA 3D</b> &nbsp; Orbital vazio: nenhuma densidade eletrônica é exibida."
+            )
+            return
+
+        if render_mode == "points":
+            if electron_count == 0:
+                empty_hex = self._color_to_hex(ORBITAL_EMPTY_POSITIVE_COLOR)
+                self.phase_legend.setText(
+                    "<b>ORBITAL VAZIO — PRÉVIA MATEMÁTICA</b> &nbsp; "
+                    f"<span style='color:{empty_hex}'>● |ψ|²</span> &nbsp; "
+                    "A cor é um destaque visual; não representa um elétron presente."
+                )
+                return
+            color_note = "as cores identificam os tipos orbitais" if multiple else "a cor identifica o tipo orbital"
+            self.phase_legend.setText(
+                f"<b>LEGENDA 3D</b> &nbsp; Nuvem de probabilidade |ψ|²: {color_note}; "
+                "o sinal da fase não é representado."
+            )
+            return
+
+        negative_color = (
+            ORBITAL_EMPTY_NEGATIVE_COLOR
+            if electron_count == 0 else ORBITAL_NEGATIVE_PHASE_COLOR
+        )
+        negative_hex = self._color_to_hex(negative_color)
+        if multiple:
+            self.phase_legend.setText(
+                "<b>LEGENDA 3D</b> &nbsp; "
+                "<span style='color:#33ccff'>● s</span> &nbsp; "
+                "<span style='color:#ff8c00'>● p</span> &nbsp; "
+                "<span style='color:#cc33ff'>● d</span> &nbsp; "
+                "<span style='color:#33ff66'>● f</span> &nbsp; "
+                f"= ψ positivo &nbsp; <span style='color:{negative_hex}'>● branco</span> = ψ negativo"
+            )
+            return
+
+        positive_color = color or ORBITAL_EMPTY_POSITIVE_COLOR
+        positive_hex = self._color_to_hex(positive_color)
+        empty_note = (
+            " &nbsp; <b>ORBITAL VAZIO — prévia matemática, sem elétron.</b>"
+            if electron_count == 0 else ""
+        )
+        self.phase_legend.setText(
+            "<b>LEGENDA 3D — fase de ψ</b> &nbsp; "
+            f"<span style='color:{positive_hex}'>● ψ &gt; 0</span> &nbsp; "
+            f"<span style='color:{negative_hex}'>● ψ &lt; 0</span>"
+            f"{empty_note}"
+        )
     
     def visualize_orbital(self, n: int, l: int, m: int = 0):
         """Renderiza um orbital específico (n, l, m)."""
@@ -916,6 +990,7 @@ class OrbitalExplorer(QMainWindow):
 
         self.simulator.scene.clear_orbital_meshes()
         if self.interaction_mode != "Explorar orbitais" and electron_count == 0:
+            self.update_phase_legend(electron_count=0)
             self.slice_status.setText(
                 "Orbital vazio: o corte 2D possui densidade eletrônica zero."
             )
@@ -932,11 +1007,17 @@ class OrbitalExplorer(QMainWindow):
         
         # Adiciona na cena
         color = getattr(orbital, 'color', (0.2, 0.8, 1.0))
-        opacity = 0.45 if electron_count == 0 else 0.8
+        opacity = 0.68 if electron_count == 0 else 0.8
+        negative_color = None
         if electron_count == 0:
-            color = (0.55, 0.55, 0.55)
+            color = ORBITAL_EMPTY_POSITIVE_COLOR
+            negative_color = ORBITAL_EMPTY_NEGATIVE_COLOR
             orbital_label += "_forma_vazia"
-        self.simulator.scene.add_orbital_mesh(mesh, orbital_label, color, opacity)
+        self.update_phase_legend(color=color, electron_count=electron_count)
+        self.simulator.scene.add_orbital_mesh(
+            mesh, orbital_label, color, opacity,
+            negative_color=negative_color,
+        )
         
         # Ajusta câmera de forma segura
         try:
@@ -975,6 +1056,7 @@ class OrbitalExplorer(QMainWindow):
             )
         self.simulator.scene.set_camera_for_range(max_range)
         self.simulator.scene.update()
+        self.update_phase_legend(multiple=True)
 
     
     def update_limits(self):
