@@ -2,22 +2,25 @@
 
 Simulador interativo de orbitais atômicos desenvolvido em Python para apoiar o ensino de física quântica e configuração eletrônica.
 
-O programa permite explorar formas orbitais em 3D, analisar cortes da função de onda em 2D e construir configurações eletrônicas verificando o Princípio de Aufbau, a Regra de Hund e o Princípio da Exclusão de Pauli.
+O programa permite explorar formas orbitais em 3D, analisar cortes da função de onda em 2D, construir configurações eletrônicas e acompanhar níveis de energia e transições eletrônicas.
 
 ## Recursos principais
 
 - Seleção de elementos químicos de `Z = 1` a `Z = 118`.
 - Exploração dos números quânticos `n`, `l` e `m`.
-- Visualização 3D por isosuperfícies ou nuvem de pontos.
+- Visualização 3D por isosuperfícies, nuvem de pontos ou grade de pontos.
 - Cortes 2D da amplitude `ψ` e da probabilidade `|ψ|²`.
 - Representação das fases positiva e negativa da função de onda.
-- Configuração eletrônica fundamental dos átomos neutros.
+- Configuração eletrônica fundamental de átomos neutros, cátions e ânions.
 - Aplicação de exceções conhecidas da ordem simples de Aufbau.
 - Diagramas de orbitais com spins `↑` e `↓`.
 - Verificação de Aufbau, Hund e Pauli.
 - Construção manual de configurações a partir de orbitais vazios.
 - Identificação de estados fundamentais e estados excitados permitidos.
 - Promoção de elétrons entre orbitais no modo manual.
+- Cartão do estado selecionado com `n`, `l`, `mₗ` e `mₛ` de cada elétron.
+- Diagrama de níveis de energia com ocupação e carga nuclear efetiva estimada.
+- Cálculo didático de absorção e emissão, com energia, frequência e comprimento de onda do fóton.
 
 ## Modos de interação
 
@@ -27,7 +30,7 @@ Exibe a forma matemática do orbital selecionado, mesmo quando ele está vazio n
 
 ### Átomo real
 
-Mostra a ocupação eletrônica fundamental do elemento selecionado. Orbitais vazios não representam densidade eletrônica física nesse modo.
+Mostra a ocupação eletrônica fundamental da espécie selecionada. A carga pode ser ajustada para estudar íons. Orbitais vazios não representam densidade eletrônica física nesse modo.
 
 ### Preenchimento manual
 
@@ -88,8 +91,8 @@ Na interface:
 1. Escolha o elemento químico.
 2. Selecione o modo de interação.
 3. Ajuste os números quânticos do orbital.
-4. Use a aba central para alternar entre a visualização 3D e o corte 2D.
-5. Consulte os dados, regras e controles de preenchimento no painel lateral.
+4. Use as abas centrais para alternar entre visualização 3D, corte 2D e energia/transições.
+5. Consulte dados, regras, preenchimento manual e fontes científicas no painel lateral.
 
 O visualizador 3D pode ser rotacionado com o mouse e ampliado com a roda de rolagem.
 
@@ -103,7 +106,8 @@ orbitals/   Orbitais e funções de onda
 particles/  Partículas fundamentais
 physics/    Constantes, blindagem e cálculos físicos
 simulator/  Renderização e gerenciamento da cena
-tests/      Testes automatizados e demonstração visual
+demos/      Demonstrações gráficas interativas
+tests/      Testes automatizados
 ui/         Interface gráfica e tema
 utils/      Grids, amostragem e cortes 2D
 main.py     Ponto de entrada da aplicação
@@ -111,26 +115,31 @@ main.py     Ponto de entrada da aplicação
 
 ## Testes
 
-Os testes automatizados de função de onda e preenchimento eletrônico podem ser executados com:
+Os testes automatizados de função de onda, preenchimento eletrônico, íons e energias podem ser executados com:
 
 ```bash
-python -m pytest tests/test_electron_filling.py tests/teste_wavefunction.py -q
+python -m pytest tests -q
 ```
 
-O arquivo `tests/test_orbital_visual.py` é uma demonstração gráfica interativa e requer uma tela com suporte a OpenGL.
+O arquivo `demos/orbital_visual_demo.py` é uma demonstração gráfica interativa e requer uma tela com suporte a OpenGL.
 
 ## Escopo científico
 
-O simulador utiliza funções de onda hidrogenoides com carga nuclear efetiva estimada pelas regras de Slater. Essa aproximação produz representações didáticas coerentes, mas não substitui métodos de química quântica multieletrônica, como Hartree–Fock ou DFT.
+O simulador utiliza funções de onda hidrogenoides com carga nuclear efetiva estimada pelas regras de Slater. As energias exibidas são aproximações hidrogenoides calculadas com essa carga efetiva. Esses modelos são adequados à exploração didática, mas não substituem métodos de química quântica multieletrônica, como Hartree–Fock ou DFT.
 
-Atualmente, o modo de átomo real trabalha com átomos neutros. O suporte a íons faz parte das extensões planejadas.
+## Referências científicas
+
+- [OpenStax Chemistry 2e — Desenvolvimento da teoria quântica](https://openstax.org/books/chemistry-2e/pages/6-3-development-of-quantum-theory): função de onda, probabilidade e números quânticos.
+- [OpenStax Chemistry 2e — Configurações eletrônicas](https://openstax.org/books/chemistry-2e/pages/6-4-electronic-structure-of-atoms-electron-configurations): Aufbau, Hund, Pauli, diagramas e exceções.
+- [IUPAC Gold Book — Princípio da Exclusão de Pauli](https://goldbook.iupac.org/terms/view/PT07089): definição terminológica.
+- [J. C. Slater — Atomic Shielding Constants](https://doi.org/10.1103/PhysRev.36.57): artigo original do modelo de blindagem usado em `Z_eff`.
+- [NIST Atomic Spectra Database](https://physics.nist.gov/asd): níveis e linhas espectrais avaliados para átomos e íons.
+- [NIST/CODATA — Constantes físicas fundamentais](https://physics.nist.gov/cuu/Constants/index.html): valores recomendados das constantes usadas nos cálculos.
 
 ## Próximos passos
 
-- Suporte a cátions e ânions.
-- Atividades didáticas guiadas.
-- Exportação de imagens e relatórios.
 - Site estático com documentação matemática, técnica e pedagógica completa.
+- Comparação opcional com dados espectroscópicos experimentais.
 
 ## Status
 

@@ -29,7 +29,7 @@ GRID_SIZE = 120              # Pontos por dimensão para calcular densidade
 GRID_RANGE = 20.0            # Extensão da caixa em unidades de Bohr (±8 a.u.)
 ISO_VALUE = 0.06            # Isosurface: |ψ|² = 2% do máximo (0.05 p 0.08)
 
-# Modo de renderização padrão: 'isosurface', 'volume', 'points'
+# Modo de renderização padrão: 'isosurface', 'points' ou 'grid_points'
 RENDER_MODE = 'isosurface'
 NUM_POINTS_CLOUD = 10000    # Pontos da nuvem Monte Carlo
 
@@ -38,9 +38,6 @@ NUM_POINTS_CLOUD = 10000    # Pontos da nuvem Monte Carlo
 WINDOW_WIDTH = 1200
 WINDOW_HEIGHT = 900
 FPS_TARGET = 30
-
-# Transparência global da janela (1.0 = opaca; 0.90 = bem transparente).
-# 0.94 mantém textos e renderização legíveis enquanto deixa o desktop aparecer.
 
 # Raios visuais das partículas (Angstroms)
 PROTON_RADIUS = 0.1
@@ -61,11 +58,11 @@ ORBITAL_OPACITY_VOLUME = 0.5
 
 # Intervalo de número atômico no slider
 MIN_Z = 1
-MAX_Z = 118          # Até Xenônio (limite prático)
+MAX_Z = 118          # Até o oganessônio
 
 # Intervalo de nível principal
 MIN_N = 1
-MAX_N = 7 # Alterando de 4 para 7
+MAX_N = 7
 
 # PALETA DE CORES PARA ORBITAIS
 

@@ -3,6 +3,9 @@ import pytest
 from atom.atom import Atom
 from atom.manual_configuration import ManualElectronConfiguration
 from orbitals.orbital import Orbital
+from physics.screening import (
+    build_ground_state_config, orbital_state_effective_charge,
+)
 
 
 def occupancy(atom, n, l):
@@ -20,6 +23,14 @@ def test_orbital_stores_explicit_opposite_spins():
     assert orbital.add_electron(spin=Orbital.SPIN_DOWN)
     assert orbital.electron_spins == (0.5, -0.5)
     assert orbital.spin_symbols == "↑↓"
+
+
+def test_hydrogen_excited_preview_keeps_nuclear_charge():
+    z_eff = orbital_state_effective_charge(
+        1, 3, 2, electron_count=1, configuration={(1, 0): 1}
+    )
+
+    assert z_eff == pytest.approx(1.0)
 
 
 def test_pauli_rejects_equal_spin_and_third_electron():
@@ -215,3 +226,56 @@ def test_manual_move_preserves_pauli_and_blocks_equal_spin_at_destination():
     assert not result.ok
     assert "Pauli" in result.message
     assert manual.electron_count == 2
+
+
+@pytest.mark.parametrize(
+    "atomic_number,charge,expected",
+    [
+        (1, 1, {}),
+        (11, 1, {(1, 0): 2, (2, 0): 2, (2, 1): 6}),
+        (17, -1, {(1, 0): 2, (2, 0): 2, (2, 1): 6, (3, 0): 2, (3, 1): 6}),
+        (26, 2, {(1, 0): 2, (2, 0): 2, (2, 1): 6, (3, 0): 2, (3, 1): 6, (3, 2): 6}),
+        (26, 3, {(1, 0): 2, (2, 0): 2, (2, 1): 6, (3, 0): 2, (3, 1): 6, (3, 2): 5}),
+        (29, 1, {(1, 0): 2, (2, 0): 2, (2, 1): 6, (3, 0): 2, (3, 1): 6, (3, 2): 10}),
+    ],
+)
+def test_ionic_ground_state_configurations(atomic_number, charge, expected):
+    assert build_ground_state_config(
+        atomic_number, electron_count=atomic_number - charge
+    ) == expected
+
+
+def test_atom_exposes_charge_electron_count_and_ion_label():
+    iron = Atom(26, charge=2)
+    chloride = Atom(17, charge=-1)
+
+    assert iron.N_electrons == 24
+    assert iron.ion_label == "Fe²⁺"
+    assert iron.get_electron_config().endswith("3d6")
+    assert chloride.N_electrons == 18
+    assert chloride.ion_label == "Cl⁻"
+    assert chloride.get_electron_config().endswith("3p6")
+    assert iron.validate_filling_rules() == {
+        "aufbau": True, "hund": True, "pauli": True
+    }
+
+
+def test_manual_configuration_uses_ion_electron_budget():
+    sodium_ion = ManualElectronConfiguration(11, charge=1)
+
+    assert sodium_ion.target_electrons == 10
+    assert sodium_ion.remaining_electrons == 10
+    sodium_ion.fill_ground_state()
+    assert sodium_ion.is_complete
+    assert sodium_ion.configuration_string() == "1s2 2s2 2p6"
+    assert sodium_ion.validate_rules()["ground_state"]
+
+
+def test_species_without_electrons_explains_charge_requirement():
+    proton = ManualElectronConfiguration(1, charge=1)
+
+    result = proton.add_electron(1, 0, 0, Orbital.SPIN_UP)
+
+    assert not result.ok
+    assert "não possui elétrons" in result.message
+    assert "carga elétrica" in result.message

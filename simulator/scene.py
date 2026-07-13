@@ -47,7 +47,7 @@ class Scene:
             self.plotter.background_color = BG_COLOR
 
         self._setup_camera()
-        # SEMPRE usa o sistema de 3 luzes (não precisamos de custom)
+        # Iluminação padrão de três pontos do PyVista.
         self.plotter.enable_3_lights()
 
         if SHOW_AXES:

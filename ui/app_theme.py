@@ -119,6 +119,24 @@ QLabel#phaseLegend {
     font-size: 9pt;
 }
 
+QLabel#transitionResult {
+    color: #dceeff;
+    background-color: #10263a;
+    border: 1px solid #31556f;
+    border-radius: 9px;
+    padding: 9px 12px;
+}
+
+QLabel#quantumStateCard {
+    color: #dff3ff;
+    background-color: #0d2638;
+    border-left: 4px solid #49cce8;
+    border-radius: 8px;
+    padding: 8px 11px;
+    font-family: "Cascadia Mono";
+    font-size: 9pt;
+}
+
 QLabel#emptySlice {
     color: #7891a8;
     background-color: #07111f;
@@ -161,7 +179,12 @@ QLabel#manualStatus[state="inactive"] {
     color: #9fb3c8;
 }
 
-QTextEdit, QTableWidget {
+QWidget#manualContent QPushButton {
+    min-height: 24px;
+    padding: 3px 8px;
+}
+
+QTextEdit, QTextBrowser, QTableWidget {
     background-color: #07111f;
     border: 1px solid #263e54;
     border-radius: 10px;
@@ -205,6 +228,11 @@ QTabBar::tab {
     margin-right: 3px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
+}
+
+QTabWidget#infoTabs QTabBar::tab {
+    padding: 8px 7px;
+    margin-right: 2px;
 }
 
 QTabBar::tab:selected {

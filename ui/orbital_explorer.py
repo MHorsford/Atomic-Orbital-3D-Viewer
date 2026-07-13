@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSlider, QLabel,
-    QPushButton, QComboBox, QSpinBox, QGroupBox, QGridLayout, QTextEdit,
+    QPushButton, QComboBox, QGroupBox, QGridLayout, QTextEdit,
     QApplication, QCheckBox, QTabWidget, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QSplitter, QScrollArea, QSizePolicy
 )
@@ -23,9 +23,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtGui import QIcon
 
-# Corte 2D: importa o backend Qt do matplotlib diretamente (em vez de
-# matplotlib.use(...)) pra não arriscar conflitar com um backend que já
-# tenha sido selecionado em outro lugar da aplicação.
+# Backend Qt usado pelos gráficos de corte 2D incorporados à janela.
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
@@ -85,8 +83,7 @@ class OrbitalExplorer(QMainWindow):
         self.main_layout.setSpacing(12)
 
         # Divisores ajustáveis evitam que os painéis laterais esmaguem a
-        # visualização 3D em telas menores e permitem ao usuário redistribuir
-        # o espaço conforme a atividade.
+        # visualização 3D em telas menores e permitem redistribuir o espaço.
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.main_splitter.setObjectName("mainSplitter")
         self.main_splitter.setChildrenCollapsible(False)
@@ -100,7 +97,7 @@ class OrbitalExplorer(QMainWindow):
         self.main_splitter.setStretchFactor(0, 0)
         self.main_splitter.setStretchFactor(1, 1)
         self.main_splitter.setStretchFactor(2, 0)
-        self.main_splitter.setSizes([330, 820, 410])
+        self.main_splitter.setSizes([340, 790, 430])
         apply_app_theme(self)
         
         # Timer para atualizações suaves
@@ -141,15 +138,15 @@ class OrbitalExplorer(QMainWindow):
     def create_control_panel(self):
             control_panel = QGroupBox("Controles de Orbital")
             control_panel.setObjectName("sideCard")
-            control_panel.setMinimumWidth(280)
+            control_panel.setMinimumWidth(300)
             control_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
             layout = QGridLayout()
             layout.setContentsMargins(14, 18, 14, 14)
             layout.setHorizontalSpacing(10)
             layout.setVerticalSpacing(12)
-            layout.setColumnMinimumWidth(0, 126)
+            layout.setColumnMinimumWidth(0, 112)
             layout.setColumnStretch(1, 1)
-            layout.setColumnMinimumWidth(2, 74)
+            layout.setColumnMinimumWidth(2, 64)
 
             # Elemento
             layout.addWidget(QLabel("Elemento (Z):"), 0, 0)
@@ -160,51 +157,63 @@ class OrbitalExplorer(QMainWindow):
             self.combo_element.currentIndexChanged.connect(self.on_element_changed)
             layout.addWidget(self.combo_element, 0, 1, 1, 2)
 
+            # Espécie iônica com significado e quantidade de elétrons explícitos.
+            layout.addWidget(QLabel("Espécie / carga:"), 1, 0)
+            self.combo_charge = QComboBox()
+            initial_charge = getattr(self.simulator.atom, "charge", 0)
+            self._populate_charge_options(
+                self.combo_element.currentData(), initial_charge
+            )
+            self.combo_charge.currentIndexChanged.connect(self.on_charge_changed)
+            layout.addWidget(self.combo_charge, 1, 1, 1, 2)
+
             # n            
-            layout.addWidget(QLabel("Nível Quântico (n):"), 1, 0)
+            layout.addWidget(QLabel("Nível (n):"), 2, 0)
             self.slider_n = QSlider(Qt.Horizontal)
             self.slider_n.setRange(1, MAX_N)
             self.slider_n.setValue(1)
             self.slider_n.sliderMoved.connect(self.schedule_update)
             self.slider_n.valueChanged.connect(self.on_n_changed)
-            layout.addWidget(self.slider_n, 1, 1)
+            layout.addWidget(self.slider_n, 2, 1)
             self.label_n = QLabel("n = 1")
             self.label_n.setFont(QFont("Cascadia Mono", 10, QFont.Bold))
-            layout.addWidget(self.label_n, 1, 2)
+            layout.addWidget(self.label_n, 2, 2)
 
             # l
-            layout.addWidget(QLabel("Tipo Orbital (l):"), 2, 0)
+            layout.addWidget(QLabel("Tipo orbital (l):"), 3, 0)
             self.slider_l = QSlider(Qt.Horizontal)
             self.slider_l.setRange(0, MAX_N - 1)
             self.slider_l.setValue(0)
             self.slider_l.sliderMoved.connect(self.schedule_update)
             self.slider_l.valueChanged.connect(self.on_l_changed)
-            layout.addWidget(self.slider_l, 2, 1)
+            layout.addWidget(self.slider_l, 3, 1)
             self.label_l = QLabel("l = 0 (s)")
             self.label_l.setFont(QFont("Cascadia Mono", 10, QFont.Bold))
-            layout.addWidget(self.label_l, 2, 2)
+            layout.addWidget(self.label_l, 3, 2)
 
             # m
-            layout.addWidget(QLabel("Orientação (m):"), 3, 0)
+            layout.addWidget(QLabel("Orientação (m):"), 4, 0)
             self.slider_m = QSlider(Qt.Horizontal)
             self.slider_m.setRange(-3, 3)
             self.slider_m.setValue(0)
             self.slider_m.sliderMoved.connect(self.schedule_update)
             self.slider_m.valueChanged.connect(self.on_m_changed)
-            layout.addWidget(self.slider_m, 3, 1)
+            layout.addWidget(self.slider_m, 4, 1)
             self.label_m = QLabel("m = 0")
             self.label_m.setFont(QFont("Cascadia Mono", 10, QFont.Bold))
-            layout.addWidget(self.label_m, 3, 2)
+            layout.addWidget(self.label_m, 4, 2)
 
             # Modo renderização
-            layout.addWidget(QLabel("Modo Renderização:"), 4, 0)
+            layout.addWidget(QLabel("Renderização:"), 5, 0)
             self.combo_mode = QComboBox()
-            self.combo_mode.addItems(["isosurface", "volume", "points"])
-            self.combo_mode.currentTextChanged.connect(self.on_mode_changed)
-            layout.addWidget(self.combo_mode, 4, 1, 1, 2)
+            self.combo_mode.addItem("Isosuperfície", "isosurface")
+            self.combo_mode.addItem("Nuvem de pontos", "points")
+            self.combo_mode.addItem("Grade de pontos", "grid_points")
+            self.combo_mode.currentIndexChanged.connect(self.on_mode_changed)
+            layout.addWidget(self.combo_mode, 5, 1, 1, 2)
 
             # Iso value
-            layout.addWidget(QLabel("Isosurface Value:"), 5, 0)
+            layout.addWidget(QLabel("Isosuperfície:"), 6, 0)
             self.slider_iso = QSlider(Qt.Horizontal)
             self.slider_iso.setRange(0, 200)
             
@@ -212,28 +221,28 @@ class OrbitalExplorer(QMainWindow):
             initial_iso_slider_val = int(ISO_VALUE * 100)
             self.slider_iso.setValue(initial_iso_slider_val) 
             self.slider_iso.sliderMoved.connect(self.on_iso_slider_moved)
-            layout.addWidget(self.slider_iso, 5, 1)
+            layout.addWidget(self.slider_iso, 6, 1)
             
             self.label_iso = QLabel(f"{ISO_VALUE:.3f}") # Texto sincronizado
-            layout.addWidget(self.label_iso, 5, 2)
+            layout.addWidget(self.label_iso, 6, 2)
 
             # Alta qualidade
-            layout.addWidget(QLabel("Alta Qualidade:"), 6, 0)
+            layout.addWidget(QLabel("Qualidade:"), 7, 0)
             self.check_quality = QCheckBox("PBR + Fundo Preto")
             self.check_quality.setChecked(self.simulator.scene.high_quality)
             self.check_quality.stateChanged.connect(self.on_quality_toggled)
-            layout.addWidget(self.check_quality, 6, 1, 1, 2)
+            layout.addWidget(self.check_quality, 7, 1, 1, 2)
 
             # Plano do corte 2D
             # Orbitais com dependência azimutal podem exigir um plano de corte
             # específico; os três planos cartesianos permanecem disponíveis.
-            layout.addWidget(QLabel("Plano do Corte 2D:"), 7, 0)
+            layout.addWidget(QLabel("Plano do corte:"), 8, 0)
             self.combo_plane = QComboBox()
             self.combo_plane.addItems(["xz", "xy", "yz"])
-            layout.addWidget(self.combo_plane, 7, 1, 1, 2)
+            layout.addWidget(self.combo_plane, 8, 1, 1, 2)
 
             # Modo de interação física/didática
-            layout.addWidget(QLabel("Modo de interação:"), 8, 0)
+            layout.addWidget(QLabel("Interação:"), 9, 0)
             self.combo_interaction_mode = QComboBox()
             self.combo_interaction_mode.addItems([
                 "Explorar orbitais",
@@ -243,7 +252,7 @@ class OrbitalExplorer(QMainWindow):
             self.combo_interaction_mode.currentTextChanged.connect(
                 self.on_interaction_mode_changed
             )
-            layout.addWidget(self.combo_interaction_mode, 8, 1, 1, 2)
+            layout.addWidget(self.combo_interaction_mode, 9, 1, 1, 2)
 
             # Botões
             button_layout = QVBoxLayout()
@@ -272,20 +281,86 @@ class OrbitalExplorer(QMainWindow):
             self.btn_slice2d.clicked.connect(self.on_slice2d_clicked)
             button_layout.addWidget(self.btn_slice2d)
 
-            layout.addLayout(button_layout, 9, 0, 1, 3)
+            layout.addLayout(button_layout, 10, 0, 1, 3)
             # Mantém todos os controles agrupados no topo. O espaço excedente
             # da janela fica abaixo dos botões, sem criar grandes lacunas.
-            layout.setRowStretch(10, 1)
+            layout.setRowStretch(11, 1)
 
+            self._configure_control_tooltips()
             control_panel.setLayout(layout)
             self.control_scroll = QScrollArea()
             self.control_scroll.setObjectName("panelScroll")
             self.control_scroll.setWidgetResizable(True)
             self.control_scroll.setFrameShape(QScrollArea.NoFrame)
             self.control_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.control_scroll.setMinimumWidth(300)
+            self.control_scroll.setMinimumWidth(320)
             self.control_scroll.setWidget(control_panel)
             self.main_splitter.addWidget(self.control_scroll)
+
+    def _configure_control_tooltips(self):
+        """Adiciona explicações curtas aos controles menos óbvios."""
+        self.combo_element.setToolTip(
+            "Escolha o elemento químico. Z é o número de prótons do núcleo."
+        )
+        self.slider_n.setToolTip(
+            "Número quântico principal n: controla a camada, o tamanho e os nós radiais."
+        )
+        self.label_n.setToolTip(self.slider_n.toolTip())
+        self.slider_l.setToolTip(
+            "Número quântico azimutal l: define o tipo e a forma do orbital (s, p, d, f...)."
+        )
+        self.label_l.setToolTip(self.slider_l.toolTip())
+        self.slider_m.setToolTip(
+            "Número quântico magnético mₗ: escolhe a orientação espacial, de −l até +l."
+        )
+        self.label_m.setToolTip(self.slider_m.toolTip())
+
+        mode_tips = (
+            "Superfície de amplitude constante; destaca a forma e as fases de ψ.",
+            "Amostra pontos segundo |ψ|²; representa uma nuvem de probabilidade.",
+            "Mostra pontos do grid acima do limiar; útil para observar a amostragem.",
+        )
+        for index, tooltip in enumerate(mode_tips):
+            self.combo_mode.setItemData(index, tooltip, Qt.ToolTipRole)
+        self.combo_mode.setToolTip(mode_tips[0])
+
+        iso_tip = (
+            "Limiar da isosuperfície. Valores menores mostram regiões mais difusas; "
+            "valores maiores aproximam a superfície do núcleo."
+        )
+        self.slider_iso.setToolTip(iso_tip)
+        self.label_iso.setToolTip(iso_tip)
+        self.check_quality.setToolTip(
+            "Ativa materiais PBR e iluminação mais detalhada, com maior custo gráfico."
+        )
+        self.combo_plane.setToolTip(
+            "Plano cartesiano usado nos gráficos de amplitude ψ e probabilidade |ψ|²."
+        )
+
+        interaction_tips = (
+            "Exibe a forma matemática mesmo quando o orbital está vazio.",
+            "Mostra somente a ocupação da configuração fundamental da espécie.",
+            "Começa com orbitais vazios para adicionar, remover e promover elétrons.",
+        )
+        self.combo_interaction_mode.blockSignals(True)
+        for index, tooltip in enumerate(interaction_tips):
+            self.combo_interaction_mode.setItemData(index, tooltip, Qt.ToolTipRole)
+        self.combo_interaction_mode.blockSignals(False)
+        self.combo_interaction_mode.setToolTip(interaction_tips[0])
+
+        self.btn_render.setToolTip("Recalcula e enquadra o orbital selecionado em 3D.")
+        self.btn_all_filled.setToolTip(
+            "Exibe simultaneamente os orbitais que possuem elétrons."
+        )
+        self.btn_rules.setToolTip(
+            "Abre o diagnóstico de Aufbau, Hund e Exclusão de Pauli."
+        )
+        self.btn_sequence.setToolTip(
+            "Mostra a ordem energética usada no preenchimento de Aufbau."
+        )
+        self.btn_slice2d.setToolTip(
+            "Gera os cortes de ψ e |ψ|² no plano cartesiano escolhido."
+        )
     
     def create_viewer_panel(self):
         """Cria as áreas 3D e 2D como abas da região central."""
@@ -320,7 +395,12 @@ class OrbitalExplorer(QMainWindow):
         self.phase_legend.setTextFormat(Qt.RichText)
         viewer_3d_layout.addWidget(self.phase_legend)
         self.update_phase_legend(multiple=True)
-        self.viewer_tabs.addTab(self.viewer_3d_tab, "Visualização 3D")
+        viewer_3d_index = self.viewer_tabs.addTab(
+            self.viewer_3d_tab, "Visualização 3D"
+        )
+        self.viewer_tabs.setTabToolTip(
+            viewer_3d_index, "Forma tridimensional e fases da função de onda"
+        )
 
         # O corte ocupa a mesma área nobre do 3D. As duas representações 2D
         # continuam separadas em subabas para comparação sem sobrecarregar a UI.
@@ -358,7 +438,20 @@ class OrbitalExplorer(QMainWindow):
         self.slice_tabs.addTab(self.slice_amp_tab, "Amplitude ψ")
         self.slice_tabs.addTab(self.slice_prob_tab, "Probabilidade |ψ|²")
         viewer_2d_layout.addWidget(self.slice_tabs, stretch=1)
-        self.viewer_tabs.addTab(self.viewer_2d_tab, "Corte 2D")
+        viewer_2d_index = self.viewer_tabs.addTab(self.viewer_2d_tab, "Corte 2D")
+        self.viewer_tabs.setTabToolTip(
+            viewer_2d_index, "Amplitude ψ e probabilidade |ψ|² em um plano"
+        )
+
+        from ui.energy_diagram import EnergyDiagramWidget
+        self.energy_widget = EnergyDiagramWidget()
+        energy_tab_index = self.viewer_tabs.addTab(
+            self.energy_widget, "Energia e transições"
+        )
+        self.viewer_tabs.setTabToolTip(
+            energy_tab_index,
+            "Níveis aproximados, absorção, emissão e regra parcial de seleção",
+        )
 
         layout.addWidget(self.viewer_tabs)
         viewer_panel.setLayout(layout)
@@ -368,7 +461,7 @@ class OrbitalExplorer(QMainWindow):
         """Cria o painel de informações."""
         info_panel = QGroupBox("Informações do Orbital")
         info_panel.setObjectName("sideCard")
-        info_panel.setMinimumWidth(360)
+        info_panel.setMinimumWidth(390)
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 16, 12, 12)
         layout.setSpacing(9)
@@ -379,19 +472,38 @@ class OrbitalExplorer(QMainWindow):
         self.label_orbital_name.setFont(QFont("Segoe UI", 18, QFont.Bold))
         self.label_orbital_name.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.label_orbital_name)
+
+        self.quantum_state_card = QLabel()
+        self.quantum_state_card.setObjectName("quantumStateCard")
+        self.quantum_state_card.setWordWrap(True)
+        self.quantum_state_card.setTextFormat(Qt.RichText)
         
         # Informações detalhadas e diagrama didático das regras de ocupação.
         self.info_tabs = QTabWidget()
+        self.info_tabs.setObjectName("infoTabs")
         self.text_info = QTextEdit()
         self.text_info.setReadOnly(True)
         self.text_info.setFont(QFont("Cascadia Mono", 9))
+
+        self.data_tab = QWidget()
+        data_layout = QVBoxLayout(self.data_tab)
+        data_layout.setContentsMargins(8, 8, 8, 8)
+        data_layout.setSpacing(8)
+        data_layout.addWidget(self.quantum_state_card)
+        data_layout.addWidget(self.text_info, stretch=1)
 
         self.rules_text = QTextEdit()
         self.rules_text.setReadOnly(True)
         self.rules_text.setFont(QFont("Cascadia Mono", 9))
 
-        self.info_tabs.addTab(self.text_info, "Dados")
-        self.info_tabs.addTab(self.rules_text, "Regras e spins")
+        self.data_tab_index = self.info_tabs.addTab(self.data_tab, "Dados")
+        self.info_tabs.setTabToolTip(
+            self.data_tab_index, "Números quânticos e parâmetros do orbital selecionado"
+        )
+        self.rules_tab_index = self.info_tabs.addTab(self.rules_text, "Regras")
+        self.info_tabs.setTabToolTip(
+            self.rules_tab_index, "Regras de Aufbau, Hund, Pauli e spins"
+        )
 
         self.manual_tab = QWidget()
         manual_tab_layout = QVBoxLayout(self.manual_tab)
@@ -404,8 +516,8 @@ class OrbitalExplorer(QMainWindow):
         self.manual_content = QWidget()
         self.manual_content.setObjectName("manualContent")
         manual_layout = QVBoxLayout(self.manual_content)
-        manual_layout.setContentsMargins(10, 10, 10, 10)
-        manual_layout.setSpacing(8)
+        manual_layout.setContentsMargins(6, 6, 6, 6)
+        manual_layout.setSpacing(5)
         self.manual_scroll.setWidget(self.manual_content)
         manual_tab_layout.addWidget(self.manual_scroll)
         self.manual_help = QLabel(
@@ -433,8 +545,9 @@ class OrbitalExplorer(QMainWindow):
         self.manual_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.manual_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.manual_table.cellClicked.connect(self.on_manual_cell_clicked)
-        self.manual_table.setMinimumHeight(210)
-        manual_layout.addWidget(self.manual_table)
+        self.manual_table.setMinimumHeight(120)
+        self.manual_table.setMaximumHeight(160)
+        manual_layout.addWidget(self.manual_table, stretch=1)
 
         self.btn_show_levels = QPushButton("Mostrar próximos níveis de energia")
         self.btn_show_levels.setProperty("variant", "accent")
@@ -501,9 +614,27 @@ class OrbitalExplorer(QMainWindow):
             self.btn_verify_manual, self.btn_show_levels, self.btn_move_electron,
         ]
         self.manual_tab_index = self.info_tabs.addTab(
-            self.manual_tab, "Preenchimento"
+            self.manual_tab, "Elétrons"
+        )
+        self.info_tabs.setTabToolTip(
+            self.manual_tab_index, "Preenchimento eletrônico manual"
         )
         self.info_tabs.setTabEnabled(self.manual_tab_index, False)
+
+        from ui.scientific_references import ScientificReferencesWidget
+        self.references_widget = ScientificReferencesWidget()
+        self.references_tab_index = self.info_tabs.addTab(
+            self.references_widget, "Fontes"
+        )
+        self.info_tabs.setTabToolTip(
+            self.references_tab_index,
+            "Referências científicas usadas como base e fontes para consulta",
+        )
+
+        info_tab_bar = self.info_tabs.tabBar()
+        info_tab_bar.setExpanding(False)
+        info_tab_bar.setUsesScrollButtons(False)
+        info_tab_bar.setElideMode(Qt.ElideRight)
         layout.addWidget(self.info_tabs, stretch=3)
         
         # Descrição
@@ -517,27 +648,130 @@ class OrbitalExplorer(QMainWindow):
     
     # CALLBACKS DOS SLIDERS
     
-        
-    def on_element_changed(self, index):
-        Z = self.combo_element.currentData()
+    def _charge_option_text(self, Z, charge):
+        electrons = Z - charge
+        charge_text = f"{charge:+d}".replace("-", "−")
+        if charge == 0:
+            species = "Neutro"
+            charge_text = "0"
+        elif charge > 0:
+            species = "Cátion"
+        elif Z == 1 and charge < -1:
+            species = "Ânion formal ⚠"
+        else:
+            species = "Ânion"
+        electron_word = "elétron" if electrons == 1 else "elétrons"
+        return f"{species} ({charge_text}) · {electrons} {electron_word}"
+
+    def _charge_option_tooltip(self, Z, charge):
+        if charge == 0:
+            return "Átomo neutro: número de prótons igual ao de elétrons."
+        if charge > 0:
+            return f"Cátion: {charge} elétron(s) removido(s) do átomo neutro."
+        if Z == 1 and charge < -1:
+            return (
+                "Configuração eletrônica formal para exploração. "
+                "Esta espécie de hidrogênio não é um íon isolado estável."
+            )
+        return f"Ânion: {abs(charge)} elétron(s) adicionado(s) ao átomo neutro."
+
+    def _populate_charge_options(self, Z, selected=0):
+        from physics.screening import max_supported_electrons
+
+        minimum = max(-3, Z - max_supported_electrons())
+        maximum = min(3, Z)
+        charges = [
+            charge for charge in (0, 1, 2, 3, -1, -2, -3)
+            if minimum <= charge <= maximum
+        ]
+        self.combo_charge.blockSignals(True)
+        self.combo_charge.clear()
+        for charge in charges:
+            self.combo_charge.addItem(self._charge_option_text(Z, charge), charge)
+            index = self.combo_charge.count() - 1
+            self.combo_charge.setItemData(
+                index, self._charge_option_tooltip(Z, charge), Qt.ToolTipRole
+            )
+        index = self.combo_charge.findData(selected)
+        self.combo_charge.setCurrentIndex(index if index >= 0 else 0)
+        self.combo_charge.blockSignals(False)
+        self._update_charge_tooltip()
+
+    def _current_charge(self):
+        charge = self.combo_charge.currentData()
+        return int(charge) if charge is not None else 0
+
+    def _set_charge(self, charge):
+        index = self.combo_charge.findData(charge)
+        if index >= 0:
+            self.combo_charge.setCurrentIndex(index)
+
+    def _update_charge_tooltip(self):
+        index = self.combo_charge.currentIndex()
+        tooltip = self.combo_charge.itemData(index, Qt.ToolTipRole) or ""
+        self.combo_charge.setToolTip(tooltip)
+
+    def _new_manual_configuration(self):
+        atom = self.simulator.atom
+        return ManualElectronConfiguration(atom.Z, charge=atom.charge)
+
+    def _replace_atom(self, Z, charge, feedback):
         from atom.atom import Atom
-        self.simulator.atom = Atom(Z=Z)
+
+        self.simulator.atom = Atom(Z=Z, charge=charge)
         if self.manual_config is not None or self.interaction_mode == "Preenchimento manual":
-            self.manual_config = ManualElectronConfiguration(Z)
-            self.manual_feedback = "Nova configuração iniciada vazia."
+            self.manual_config = self._new_manual_configuration()
+            self.manual_feedback = feedback
             self.manual_extra_levels = 0
-        self.update_limits()   # já chama on_render_clicked internamente
+        self.update_limits()
         self.update_filling_diagram()
         self.update_manual_panel()
 
+
+    def on_element_changed(self, index):
+        Z = self.combo_element.currentData()
+        if Z is None:
+            return
+        self._populate_charge_options(Z, selected=0)
+        self._replace_atom(Z, 0, "Novo elemento neutro; configuração manual reiniciada vazia.")
+
+    def on_charge_changed(self, index):
+        """Reconstrói o átomo mantendo Z e alterando o total de elétrons."""
+        Z = self.combo_element.currentData()
+        charge = self.combo_charge.itemData(index)
+        if Z is None or charge is None:
+            return
+        self._update_charge_tooltip()
+        charge = int(charge)
+        if Z - charge == 0:
+            feedback = (
+                "Esta espécie não possui elétrons. Escolha 'Neutro' ou um "
+                "ânion para inserir elétrons."
+            )
+        elif Z == 1 and charge < -1:
+            feedback = (
+                "Configuração formal para exploração: esta espécie de "
+                "hidrogênio não é um íon isolado estável."
+            )
+        else:
+            feedback = "Carga alterada; configuração manual reiniciada vazia."
+        self._replace_atom(
+            Z, charge, feedback
+        )
+
     def on_interaction_mode_changed(self, mode):
         """Alterna entre exploração, átomo real e construção manual."""
+        index = self.combo_interaction_mode.currentIndex()
+        tooltip = self.combo_interaction_mode.itemData(index, Qt.ToolTipRole)
+        if tooltip:
+            self.combo_interaction_mode.setToolTip(tooltip)
         self.interaction_mode = mode
         if mode == "Preenchimento manual":
             self.info_tabs.setTabEnabled(self.manual_tab_index, True)
             if (self.manual_config is None
-                    or self.manual_config.atomic_number != self.simulator.atom.Z):
-                self.manual_config = ManualElectronConfiguration(self.simulator.atom.Z)
+                    or self.manual_config.atomic_number != self.simulator.atom.Z
+                    or self.manual_config.charge != self.simulator.atom.charge):
+                self.manual_config = self._new_manual_configuration()
                 self.manual_feedback = "Configuração manual iniciada com todos os orbitais vazios."
                 self.manual_extra_levels = 0
             self.info_tabs.setCurrentWidget(self.manual_tab)
@@ -545,7 +779,7 @@ class OrbitalExplorer(QMainWindow):
             self.info_tabs.setCurrentWidget(self.rules_text)
             self.info_tabs.setTabEnabled(self.manual_tab_index, False)
         else:
-            self.info_tabs.setCurrentWidget(self.text_info)
+            self.info_tabs.setCurrentWidget(self.data_tab)
             self.info_tabs.setTabEnabled(self.manual_tab_index, False)
         self.update_manual_panel()
         self.update_filling_diagram()
@@ -608,8 +842,14 @@ class OrbitalExplorer(QMainWindow):
     
 
     
-    def on_mode_changed(self, mode):
+    def on_mode_changed(self, index):
         """Quando muda o modo de renderização."""
+        mode = self.combo_mode.itemData(index)
+        if mode is None:
+            return
+        tooltip = self.combo_mode.itemData(index, Qt.ToolTipRole)
+        if tooltip:
+            self.combo_mode.setToolTip(tooltip)
         self.simulator.set_render_mode(mode)
         self.on_render_clicked()
     
@@ -660,6 +900,26 @@ class OrbitalExplorer(QMainWindow):
         # Atualizar info
         self.update_info(n, l, m)
         self.update_filling_diagram()
+        self.update_energy_diagram()
+
+    def update_energy_diagram(self):
+        """Sincroniza níveis e transições com a configuração exibida."""
+        if not hasattr(self, 'energy_widget'):
+            return
+        atom = self.simulator.atom
+        if self.interaction_mode == "Preenchimento manual" and self.manual_config:
+            configuration = self.manual_config.subshell_occupancy()
+            electron_count = self.manual_config.electron_count
+        else:
+            configuration = atom.get_subshell_occupancy()
+            electron_count = atom.N_electrons
+        self.energy_widget.update_state(
+            atom.Z,
+            electron_count,
+            configuration,
+            self.selected_quantum_numbers()[:2],
+            atom.ion_label,
+        )
     
     def on_slice2d_clicked(self):
         """
@@ -673,11 +933,7 @@ class OrbitalExplorer(QMainWindow):
             m = 0
         plane = self.combo_plane.currentText()
 
-        from physics.screening import slater_effective_charge
-
-        Z_eff = slater_effective_charge(self.simulator.atom.Z, n, l)
-        if Z_eff is None or Z_eff <= 0:
-            Z_eff = max(self.simulator.atom.Z - (n - 1), 0.1)
+        Z_eff = self.effective_charge_for_state(n, l)
 
         occupied = self.selected_occupancy_orbital(n, l, m)
         electron_count = occupied.electrons if occupied else 0
@@ -769,6 +1025,23 @@ class OrbitalExplorer(QMainWindow):
         if self.interaction_mode == "Preenchimento manual" and self.manual_config:
             return self.manual_config.get_orbital(n, l, m)
         return self.simulator.atom.get_orbital_by_quantum_numbers(n, l, m)
+
+    def effective_charge_for_state(self, n, l):
+        """Retorna Z_eff usando a configuração exibida na interface."""
+        from physics.screening import orbital_state_effective_charge
+
+        atom = self.simulator.atom
+        if self.interaction_mode == "Preenchimento manual" and self.manual_config:
+            configuration = self.manual_config.subshell_occupancy()
+            electron_count = self.manual_config.electron_count
+        else:
+            configuration = atom.get_subshell_occupancy()
+            electron_count = atom.N_electrons
+        return orbital_state_effective_charge(
+            atom.Z, n, l,
+            electron_count=electron_count,
+            configuration=configuration,
+        )
 
     def select_quantum_numbers(self, n, l, m):
         """Sincroniza uma caixa clicada com os três controles quânticos."""
@@ -910,7 +1183,7 @@ class OrbitalExplorer(QMainWindow):
                 info += "\n"
         
         self.text_info.setText(info)
-        self.info_tabs.setCurrentWidget(self.text_info)
+        self.info_tabs.setCurrentWidget(self.data_tab)
     
     # RENDERIZAÇÃO DE ORBITAIS
 
@@ -925,7 +1198,7 @@ class OrbitalExplorer(QMainWindow):
         if not hasattr(self, 'phase_legend'):
             return
 
-        render_mode = self.combo_mode.currentText() if hasattr(self, 'combo_mode') else "isosurface"
+        render_mode = self.combo_mode.currentData() if hasattr(self, 'combo_mode') else "isosurface"
         if electron_count == 0 and self.interaction_mode != "Explorar orbitais":
             self.phase_legend.setText(
                 "<b>LEGENDA 3D</b> &nbsp; Orbital vazio: nenhuma densidade eletrônica é exibida."
@@ -979,11 +1252,7 @@ class OrbitalExplorer(QMainWindow):
     
     def visualize_orbital(self, n: int, l: int, m: int = 0):
         """Renderiza um orbital específico (n, l, m)."""
-        from physics.screening import slater_effective_charge
-        
-        Z_eff = slater_effective_charge(self.simulator.atom.Z, n, l)
-        if Z_eff is None or Z_eff <= 0:
-            Z_eff = max(self.simulator.atom.Z - (n - 1), 0.1)
+        Z_eff = self.effective_charge_for_state(n, l)
 
         occupied = self.selected_occupancy_orbital(n, l, m)
         electron_count = occupied.electrons if occupied else 0
@@ -1019,26 +1288,29 @@ class OrbitalExplorer(QMainWindow):
             negative_color=negative_color,
         )
         
-        # Ajusta câmera de forma segura
+        # Enquadra a malha realmente gerada; o alcance teórico pode conter
+        # regiões onde a amplitude já é desprezível e afastar demais a câmera.
         try:
-            range_max = self.simulator.renderer._get_range_for_orbital(orbital)
+            self.simulator.scene.reset_camera()
         except:
-            range_max = n * 5.0   # fallback seguro
-        
-        self.simulator.scene.set_camera_for_range(range_max)
+            range_max = self.simulator.renderer._get_range_for_orbital(orbital)
+            self.simulator.scene.set_camera_for_range(range_max)
         self.simulator.scene.update()
 
     def show_manual_filled(self):
         """Renderiza apenas os orbitais ocupados na construção do usuário."""
-        from physics.screening import slater_effective_charge
+        from physics.screening import orbital_state_effective_charge
 
         self.simulator.scene.clear_orbital_meshes()
         max_range = 1.0
+        configuration = self.manual_config.subshell_occupancy()
         for source in self.manual_config.orbitals:
             if source.electrons == 0:
                 continue
-            Z_eff = slater_effective_charge(
-                self.simulator.atom.Z, source.n, source.l
+            Z_eff = orbital_state_effective_charge(
+                self.simulator.atom.Z, source.n, source.l,
+                electron_count=self.manual_config.electron_count,
+                configuration=configuration,
             )
             orbital = Orbital(
                 n=source.n, l=source.l, m=source.m,
@@ -1109,11 +1381,31 @@ class OrbitalExplorer(QMainWindow):
 
     
     # ATUALIZAÇÃO DE INFORMAÇÕES
+
+    def update_quantum_state_card(self, n, l, m, orbital):
+        """Mostra os quatro números quânticos de cada elétron selecionado."""
+        spins = orbital.electron_spins if orbital is not None else ()
+        base = f"n={n}, l={l}, mₗ={m:+d}"
+        if not spins:
+            detail = (
+                f"<b>Orbital vazio:</b> ({base}). mₛ não se aplica enquanto "
+                "não houver elétron; os estados disponíveis são +½ e −½."
+            )
+        else:
+            states = []
+            for index, spin in enumerate(spins, start=1):
+                spin_text = "+½" if spin > 0 else "−½"
+                states.append(
+                    f"Elétron {index}: ({base}, mₛ={spin_text})"
+                )
+            detail = "<br>".join(states)
+        self.quantum_state_card.setText(
+            f"<b>ESTADO QUÂNTICO SELECIONADO</b><br>{detail}"
+        )
     
     def update_info(self, n: int, l: int, m: int):
         """Atualiza o painel de informações."""
         from orbitals.orbital_types import get_orbital_type, ORBITAL_TYPES
-        from physics.screening import slater_effective_charge
         
         # Nome do orbital
         orbital_type = get_orbital_type(l)
@@ -1122,10 +1414,11 @@ class OrbitalExplorer(QMainWindow):
         electron_count = occupied_orbital.electrons if occupied_orbital else 0
         occupancy_label = "VAZIO" if electron_count == 0 else f"{electron_count} e⁻"
         self.label_orbital_name.setText(f"{orbital_name} — {occupancy_label}")
+        self.update_quantum_state_card(n, l, m, occupied_orbital)
         
         # Informações detalhadas
         orbital_type = get_orbital_type(l)
-        Z_eff = slater_effective_charge(self.simulator.atom.Z, n, l)
+        Z_eff = self.effective_charge_for_state(n, l)
         
         info = f"Modo: {self.interaction_mode}\n"
         info += f"Estado do orbital: {occupancy_label}\n"
@@ -1151,8 +1444,10 @@ class OrbitalExplorer(QMainWindow):
         
         info += f"Parâmetros do Elemento:\n"
         info += f"  Z (nuclear)    = {self.simulator.atom.Z}\n"
+        info += f"  Carga          = {self.simulator.atom.charge:+d}\n"
+        info += f"  Elétrons       = {self.simulator.atom.N_electrons}\n"
         info += f"  Z_eff          = {Z_eff:.2f}\n"
-        info += f"  Elemento       = {self.simulator.atom.get_element_symbol()}\n\n"
+        info += f"  Espécie        = {self.simulator.atom.ion_label}\n\n"
         
         info += f"Características:\n"
         info += f"  {orbital_type.description}\n"
@@ -1185,8 +1480,8 @@ class OrbitalExplorer(QMainWindow):
         
         info = f"CONFIGURAÇÃO ELETRÔNICA\n"
         info += f"{'=' * 50}\n\n"
-        info += f"Elemento: {atom.get_element_name()} ({atom.get_element_symbol()})\n"
-        info += f"Z = {atom.Z} | Elétrons = {atom.N_electrons}\n\n"
+        info += f"Espécie: {atom.get_element_name()} ({atom.ion_label})\n"
+        info += f"Z = {atom.Z} | Carga = {atom.charge:+d} | Elétrons = {atom.N_electrons}\n\n"
         info += f"Configuração:\n{config}\n\n"
         info += f"Elétrons de valência: {atom.get_valence_electrons()}\n\n"
         info += f"Orbitais preenchidos:\n"
@@ -1197,7 +1492,7 @@ class OrbitalExplorer(QMainWindow):
                 info += f"  {label:5s} — {orbital.electrons} e⁻ [{orbital.spin_symbols}]\n"
         
         self.text_info.setText(info)
-        self.info_tabs.setCurrentWidget(self.text_info)
+        self.info_tabs.setCurrentWidget(self.data_tab)
 
     def update_filling_diagram(self):
         """Atualiza o diagrama orbital e o resultado das três verificações."""
@@ -1213,8 +1508,9 @@ class OrbitalExplorer(QMainWindow):
             selected = self.manual_config.get_orbital(n, l, m)
             selected_count = selected.electrons if selected else 0
             info = (
-                f"MODO DE PREENCHIMENTO MANUAL — Z = {atom.Z}\n"
-                f"Elétrons: {self.manual_config.electron_count}/{atom.Z}\n"
+                f"MODO DE PREENCHIMENTO MANUAL — {atom.ion_label}\n"
+                f"Elétrons: {self.manual_config.electron_count}/"
+                f"{self.manual_config.target_electrons}\n"
                 f"Configuração: {self.manual_config.configuration_string()}\n\n"
                 f"{mark(checks['aufbau'])} AUFBAU — ordem de menor energia\n"
                 f"{mark(checks['hund'])} HUND   — ocupação simples antes dos pares\n"
@@ -1245,7 +1541,8 @@ class OrbitalExplorer(QMainWindow):
             else ""
         )
         info = (
-            f"{atom.get_element_name()} ({atom.get_element_symbol()}) — Z = {atom.Z}\n"
+            f"{atom.get_element_name()} ({atom.ion_label}) — "
+            f"Z = {atom.Z}, carga = {atom.charge:+d}, elétrons = {atom.N_electrons}\n"
             f"Configuração: {atom.get_electron_config()}\n"
             f"{exception_note}\n"
             f"{mark(checks['aufbau'])} AUFBAU — subníveis ocupados na ordem de energia\n"
@@ -1317,7 +1614,10 @@ class OrbitalExplorer(QMainWindow):
 
         checks = self.manual_config.validate_rules()
         mark = lambda valid: "✓" if valid else "⚠"
-        if self.manual_config.is_complete and checks["ground_state"]:
+        if self.manual_config.target_electrons == 0:
+            state_banner = f"{self.simulator.atom.ion_label} — ESPÉCIE SEM ELÉTRONS"
+            banner_style = "inactive"
+        elif self.manual_config.is_complete and checks["ground_state"]:
             state_banner = "ESTADO FUNDAMENTAL CORRETO ✓"
             banner_style = "ground"
         elif self.manual_config.is_complete:
@@ -1329,7 +1629,7 @@ class OrbitalExplorer(QMainWindow):
         status = (
             f"{state_banner}\n"
             f"Elétrons: {self.manual_config.electron_count}/"
-            f"{self.manual_config.atomic_number} | "
+            f"{self.manual_config.target_electrons} | "
             f"Restantes: {self.manual_config.remaining_electrons}\n"
             f"Configuração: {self.manual_config.configuration_string()}\n"
             f"Aufbau {mark(checks['aufbau'])}  Hund {mark(checks['hund'])}  "
@@ -1341,7 +1641,24 @@ class OrbitalExplorer(QMainWindow):
         self.manual_status.style().unpolish(self.manual_status)
         self.manual_status.style().polish(self.manual_status)
         self.manual_status.setText(status)
-
+        can_add = self.manual_config.remaining_electrons > 0
+        self.btn_spin_up.setEnabled(can_add)
+        self.btn_spin_down.setEnabled(can_add)
+        self.btn_auto_fill.setEnabled(self.manual_config.target_electrons > 0)
+        if self.manual_config.target_electrons == 0:
+            add_tooltip = (
+                "Esta espécie possui zero elétrons. Escolha uma carga com "
+                "elétrons disponíveis."
+            )
+        elif not can_add:
+            add_tooltip = (
+                "Todos os elétrons já foram colocados. Remova ou mova um "
+                "elétron para alterar a configuração."
+            )
+        else:
+            add_tooltip = "Adiciona um elétron ao orbital selecionado."
+        self.btn_spin_up.setToolTip(add_tooltip)
+        self.btn_spin_down.setToolTip(add_tooltip)
         selected_subshell = self.selected_quantum_numbers()[:2]
         visible = set(self.manual_config.visible_subshells(
             selected_subshell, self.manual_extra_levels

@@ -32,25 +32,33 @@ class Atom:
         nucleus       : objeto Nucleus (prótons + nêutrons)
         orbitals      : lista de objetos Orbital preenchidos
         Z             : número atômico (prótons)
-        N             : número de elétrons (igual a Z para átomo neutro)
+        charge        : carga elétrica inteira, em unidades de e
+        N             : número de elétrons, calculado por Z - charge
         position      : posição do átomo no espaço
     """
 
-    def __init__(self, Z: int = 1):
+    def __init__(self, Z: int = 1, charge: int = 0):
         """
-        Cria um átomo com número atômico Z.
+        Cria um átomo ou íon com número atômico Z e carga inteira.
 
         Parâmetros:
             Z : número atômico (número de prótons)
+            charge : carga do sistema; positiva para cátions e negativa para ânions
         """
+        if not isinstance(charge, int):
+            raise TypeError("A carga deve ser um número inteiro")
+        electron_count = Z - charge
+        if electron_count < 0:
+            raise ValueError("A carga positiva não pode exceder o número atômico")
         self.nucleus = Nucleus(Z=Z, N=0)  # Por enquanto, isótopo natural (padrão)
+        self.charge = charge
         self.orbitals: List[Orbital] = []
         self.position = np.array([0.0, 0.0, 0.0])
 
         # Constrói e preenche os orbitais
-        self._build_orbitals(Z)
+        self._build_orbitals(Z, electron_count)
 
-    def _build_orbitals(self, Z: int) -> None:
+    def _build_orbitals(self, Z: int, electron_count: int) -> None:
         """
         Cria e preenche orbitais subnível por subnível.
         
@@ -62,7 +70,9 @@ class Atom:
                 4. Aplica Pauli (máx 2 por orbital)
         """
         self.orbitals = []
-        ground_state_config = build_ground_state_config(Z)
+        ground_state_config = build_ground_state_config(
+            Z, electron_count=electron_count
+        )
 
         for n, l in get_orbital_sequence():
             electrons_in_subshell = ground_state_config.get((n, l), 0)
@@ -70,7 +80,9 @@ class Atom:
                 continue
             
             # Calcula Z_eff uma vez para todo o subnível
-            Z_eff = slater_effective_charge(Z, n, l)
+            Z_eff = slater_effective_charge(
+                Z, n, l, electron_count=electron_count
+            )
             
             # Cria todos os orbitais deste subnível
             subshell_orbitals = []
@@ -108,7 +120,18 @@ class Atom:
     @property
     def is_neutral(self) -> bool:
         """Retorna True se o átomo é neutro (N_elétrons == Z)"""
-        return self.N_electrons == self.Z
+        return self.charge == 0
+
+    @property
+    def ion_label(self) -> str:
+        """Símbolo químico acompanhado da carga, como Fe²⁺ ou Cl⁻."""
+        symbol = self.get_element_symbol()
+        if self.charge == 0:
+            return symbol
+        superscript = str.maketrans("0123456789+-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻")
+        magnitude = "" if abs(self.charge) == 1 else str(abs(self.charge))
+        sign = "+" if self.charge > 0 else "-"
+        return symbol + (magnitude + sign).translate(superscript)
 
     def get_element_symbol(self) -> str:
         """Retorna o símbolo do elemento (ex: 'H', 'C')"""
@@ -207,7 +230,9 @@ class Atom:
 
     def validate_filling_rules(self) -> Dict[str, bool]:
         """Verifica Aufbau, Hund e Pauli na configuração eletrônica atual."""
-        expected = build_ground_state_config(self.Z)
+        expected = build_ground_state_config(
+            self.Z, electron_count=self.N_electrons
+        )
         expected = {key: value for key, value in expected.items() if value > 0}
         aufbau_ok = self.get_subshell_occupancy() == expected
 
@@ -262,7 +287,7 @@ class Atom:
     @property
     def has_configuration_exception(self) -> bool:
         """Indica uma promoção eletrônica na configuração fundamental."""
-        return has_ground_state_exception(self.Z)
+        return self.is_neutral and has_ground_state_exception(self.Z)
 
     def get_orbital_by_quantum_numbers(self, n: int, l: int, m: int) -> Orbital:
         """
@@ -286,10 +311,10 @@ class Atom:
         return "\n".join(lines)
 
     def __str__(self) -> str:
-        symbol = self.get_element_symbol()
+        symbol = self.ion_label
         config = self.get_electron_config()
         return (
-            f"{symbol} (Z={self.Z}) | "
+            f"{symbol} (Z={self.Z}, carga={self.charge:+d}) | "
             f"Elétrons: {self.N_electrons} | "
             f"Config: {config}"
         )

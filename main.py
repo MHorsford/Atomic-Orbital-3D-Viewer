@@ -1,12 +1,6 @@
-"""
-main_explorer.py
-
-Ponto de entrada para o Orbital Explorer — UI interativa com sliders.
-Permite explorar qualquer orbital do hidrogênio com controles visuais.
-"""
+"""Ponto de entrada da interface do Orbital Explorer."""
 
 import sys
-import os
 import os
 
 
@@ -17,6 +11,7 @@ from atom.atom import Atom
 from simulator.simulator import Simulator
 from ui.orbital_explorer import launch_explorer
 from config import HIGH_QUALITY_RENDER
+
 
 def main():
     print("=" * 70)

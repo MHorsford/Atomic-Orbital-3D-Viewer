@@ -1,4 +1,4 @@
-# tests/test_orbital_single.py
+# Demonstração visual interativa de um orbital isolado.
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -19,7 +19,7 @@ def visualize_orbital(n, l, m=0, electrons=2, range_max=None, title=""):
     
     orb.calculate_density(size=75 if n==1 else 90, range_max=range_max)
     
-    # ================= PLOT =================
+    # Cena 3D
     plotter = pv.Plotter(window_size=[1400, 900])
     plotter.set_background('black')
     
@@ -46,7 +46,7 @@ def visualize_orbital(n, l, m=0, electrons=2, range_max=None, title=""):
     plotter.show()
 
 
-# ===================== MENU DE TESTES =====================
+# Execução da demonstração
 if __name__ == "__main__":
     print("=== Teste Individual de Orbitais ===\n")
     

@@ -76,11 +76,11 @@ class Renderer:
         Estima o alcance espacial a partir do tamanho característico do orbital.
         """
         n = orbital.n
-        Zeff = orbital.Z_eff
+        Zeff = max(float(orbital.Z_eff), 0.1)
         a0 = 0.529177  # Å (Bohr radius)
 
-        # Usa n^2 como referência, com fator 5.5 para garantir que caiba tudo
-        range_max = (orbital.n ** 2) * a0 * 5.5
+        # O raio hidrogenoide característico cresce com n² e diminui com Z_eff.
+        range_max = (n ** 2) * a0 * 5.5 / Zeff
         return max(range_max, 2.0)  # Garante mínimo de 2 Å
 
     def _adaptive_iso_value(self, n, l):

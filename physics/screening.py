@@ -55,6 +55,11 @@ def max_electrons_in_subshell(l: int) -> int:
     return 2 * (2 * l + 1)
 
 
+def max_supported_electrons() -> int:
+    """Capacidade total dos subníveis disponíveis na sequência."""
+    return sum(max_electrons_in_subshell(l) for _, l in get_orbital_sequence())
+
+
 # Configurações fundamentais que fogem da aplicação mecânica da regra de
 # Madelung/Aufbau. Os valores abaixo substituem apenas os subníveis envolvidos
 # na promoção eletrônica; os demais continuam sendo preenchidos normalmente.
@@ -94,39 +99,83 @@ def has_ground_state_exception(Z: int) -> bool:
 
 # CONSTRUÇÃO DA CONFIGURAÇÃO ELETRÔNICA (para um dado Z)
 
-def build_ground_state_config(Z: int) -> Dict[Tuple[int, int], int]:
+def _fill_aufbau(electron_count: int) -> Dict[Tuple[int, int], int]:
+    """Distribui elétrons mecanicamente pela sequência de Aufbau."""
+    config: Dict[Tuple[int, int], int] = {}
+    electrons_left = electron_count
+    for n, l in get_orbital_sequence():
+        if electrons_left <= 0:
+            break
+        fill = min(electrons_left, max_electrons_in_subshell(l))
+        if fill:
+            config[(n, l)] = fill
+            electrons_left -= fill
+    if electrons_left > 0:
+        raise ValueError("Número de elétrons excede os subníveis disponíveis")
+    return config
+
+
+def _remove_outermost_electrons(
+        config: Dict[Tuple[int, int], int], amount: int
+) -> Dict[Tuple[int, int], int]:
+    """Remove elétrons da maior camada n e, em empate, do maior l."""
+    result = dict(config)
+    for _ in range(amount):
+        occupied = [key for key, count in result.items() if count > 0]
+        if not occupied:
+            raise ValueError("Não há elétrons suficientes para formar o cátion")
+        subshell = max(occupied, key=lambda key: (key[0], key[1]))
+        result[subshell] -= 1
+        if result[subshell] == 0:
+            result.pop(subshell)
+    return result
+
+
+def build_ground_state_config(
+        Z: int, electron_count: int = None
+) -> Dict[Tuple[int, int], int]:
     """
-    Constrói a configuração fundamental do átomo com número atômico Z,
-    partindo de Aufbau e aplicando as promoções eletrônicas conhecidas.
+    Constrói a configuração fundamental de um átomo ou íon com número
+    atômico Z. Se electron_count não for informado, usa o átomo neutro.
+
+    Cátions são obtidos removendo elétrons da camada de maior n; por isso,
+    em metais de transição, ns é esvaziado antes de (n-1)d. Ânions recebem
+    elétrons nos primeiros subníveis disponíveis da sequência de Aufbau.
 
     Retorna um dicionário: {(n, l): número_de_elétrons}
     Exemplo: Z=6 (Carbono) → {(1,0):2, (2,0):2, (2,1):2}
     """
-    config = {}
-    electrons_left = Z
+    if Z < 1:
+        raise ValueError("O número atômico deve ser positivo")
+    target = Z if electron_count is None else int(electron_count)
+    if target < 0:
+        raise ValueError("O número de elétrons não pode ser negativo")
 
-    for n, l in get_orbital_sequence():
-        if electrons_left <= 0:
-            break
-        max_e = max_electrons_in_subshell(l)
-        fill = min(electrons_left, max_e)
-        if fill > 0:
-            config[(n, l)] = fill
-            electrons_left -= fill
+    config = _fill_aufbau(Z)
 
-    # Se ainda sobrou elétrons (Z > 118), coloca no próximo orbital (improvável)
-    if electrons_left > 0:
-        # Fallback: coloca no último subnível disponível
-        last_key = list(config.keys())[-1]
-        config[last_key] += electrons_left
-
-    for subshell, electron_count in GROUND_STATE_EXCEPTIONS.get(Z, {}).items():
-        if electron_count:
-            config[subshell] = electron_count
+    for subshell, exception_count in GROUND_STATE_EXCEPTIONS.get(Z, {}).items():
+        if exception_count:
+            config[subshell] = exception_count
         else:
             config.pop(subshell, None)
 
-    return config
+    if target < Z:
+        return _remove_outermost_electrons(config, Z - target)
+
+    if target > Z:
+        extra = target - Z
+        for n, l in get_orbital_sequence():
+            available = max_electrons_in_subshell(l) - config.get((n, l), 0)
+            added = min(extra, available)
+            if added:
+                config[(n, l)] = config.get((n, l), 0) + added
+                extra -= added
+            if extra == 0:
+                break
+        if extra:
+            raise ValueError("Número de elétrons excede os subníveis disponíveis")
+
+    return {key: count for key, count in config.items() if count > 0}
 
 
 # Alias público para a construção da configuração fundamental.
@@ -136,7 +185,10 @@ _build_aufbau_config = build_ground_state_config
 # CÁLCULO DE Z_EFF (REGRAS DE SLATER)
 
 
-def slater_effective_charge(Z: int, n: int, l: int) -> float:
+def slater_effective_charge(
+        Z: int, n: int, l: int, electron_count: int = None,
+        configuration: Dict[Tuple[int, int], int] = None,
+) -> float:
     """
     Calcula a carga nuclear efetiva Z_eff para um elétron no orbital (n, l)
     de um átomo com número atômico Z seguindo rigorosamente os grupos de Slater.
@@ -145,17 +197,19 @@ def slater_effective_charge(Z: int, n: int, l: int) -> float:
         return 1.0
 
     # 1. Obter a configuração eletrônica completa
-    full_config = build_ground_state_config(Z)
+    full_config = (
+        dict(configuration)
+        if configuration is not None
+        else build_ground_state_config(Z, electron_count=electron_count)
+    )
 
     # 2. Remover 1 elétron do subnível alvo
     target_key = (n, l)
     target_count = full_config.get(target_key, 0)
 
-    if target_count <= 0:
-        return float(Z)
-
     config = full_config.copy()
-    config[target_key] = target_count - 1
+    if target_count > 0:
+        config[target_key] = target_count - 1
 
     # Mapeamento de precedência dos grupos de Slater:
     # Um grupo A está "à esquerda" (internamente) de B se:
@@ -209,6 +263,35 @@ def slater_effective_charge(Z: int, n: int, l: int) -> float:
     # 4. Calcular Z_eff final
     Z_eff = Z - sigma
     return max(0.1, Z_eff)
+
+
+def orbital_state_effective_charge(
+        Z: int, n: int, l: int, electron_count: int = None,
+        configuration: Dict[Tuple[int, int], int] = None,
+) -> float:
+    """
+    Calcula Z_eff para o estado orbital indicado.
+
+    Se o subnível estiver vazio, constrói uma configuração excitada de teste:
+    o elétron mais externo é deslocado para o subnível selecionado. Isso evita
+    contar o mesmo elétron simultaneamente no estado inicial e no estado final.
+    """
+    current = (
+        dict(configuration)
+        if configuration is not None
+        else build_ground_state_config(Z, electron_count=electron_count)
+    )
+    target = (n, l)
+    if current.get(target, 0) <= 0:
+        occupied = [key for key, count in current.items() if count > 0]
+        if occupied:
+            source = max(occupied, key=lambda key: (key[0], key[1]))
+            current[source] -= 1
+            if current[source] == 0:
+                current.pop(source)
+        current[target] = current.get(target, 0) + 1
+
+    return slater_effective_charge(Z, n, l, configuration=current)
 
 
 # FUNÇÕES AUXILIARES DA API PÚBLICA

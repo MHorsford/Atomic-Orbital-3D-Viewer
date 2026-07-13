@@ -5,7 +5,9 @@ from typing import Dict, List, Tuple
 
 from orbitals.orbital import Orbital
 from orbitals.orbital_types import get_orbital_type
-from physics.screening import build_ground_state_config, get_orbital_sequence
+from physics.screening import (
+    build_ground_state_config, get_orbital_sequence, max_supported_electrons,
+)
 
 
 @dataclass(frozen=True)
@@ -18,10 +20,18 @@ class ManualActionResult:
 class ManualElectronConfiguration:
     """Configuração separada do átomo real, inicialmente sem elétrons."""
 
-    def __init__(self, atomic_number: int):
+    def __init__(self, atomic_number: int, charge: int = 0):
         if atomic_number < 1:
             raise ValueError("O número atômico deve ser positivo")
+        if not isinstance(charge, int):
+            raise TypeError("A carga deve ser um número inteiro")
+        if atomic_number - charge < 0:
+            raise ValueError("A carga positiva não pode exceder o número atômico")
+        if atomic_number - charge > max_supported_electrons():
+            raise ValueError("O íon excede os subníveis disponíveis")
         self.atomic_number = atomic_number
+        self.charge = charge
+        self.target_electrons = atomic_number - charge
         self.orbitals: List[Orbital] = []
         self._history: List[Dict[Tuple[int, int, int], Tuple[float, ...]]] = []
 
@@ -35,11 +45,11 @@ class ManualElectronConfiguration:
 
     @property
     def remaining_electrons(self) -> int:
-        return self.atomic_number - self.electron_count
+        return self.target_electrons - self.electron_count
 
     @property
     def is_complete(self) -> bool:
-        return self.electron_count == self.atomic_number
+        return self.electron_count == self.target_electrons
 
     def get_orbital(self, n: int, l: int, m: int):
         for orbital in self.orbitals:
@@ -56,7 +66,7 @@ class ManualElectronConfiguration:
         for n, l in sequence:
             basic.append((n, l))
             capacity += 2 * (2 * l + 1)
-            if reached_target or capacity >= self.atomic_number:
+            if reached_target or capacity >= self.target_electrons:
                 if reached_target:
                     break
                 reached_target = True
@@ -90,6 +100,12 @@ class ManualElectronConfiguration:
         if orbital is None:
             return ManualActionResult(False, "Combinação de números quânticos inválida.")
         if self.remaining_electrons <= 0:
+            if self.target_electrons == 0:
+                return ManualActionResult(
+                    False,
+                    "Esta espécie não possui elétrons. Altere a carga elétrica "
+                    "para construir uma espécie com elétrons.",
+                )
             occupied = [
                 f"{item.n}{get_orbital_type(item.l).letter} (mₗ={item.m:+d})"
                 for item in self.orbitals if item.electrons
@@ -181,7 +197,9 @@ class ManualElectronConfiguration:
         for orbital in self.orbitals:
             orbital.electrons = 0
 
-        target = build_ground_state_config(self.atomic_number)
+        target = build_ground_state_config(
+            self.atomic_number, electron_count=self.target_electrons
+        )
         for n, l in get_orbital_sequence():
             remaining = target.get((n, l), 0)
             subshell = [
@@ -217,7 +235,9 @@ class ManualElectronConfiguration:
 
     def validate_rules(self) -> Dict[str, bool]:
         current = self.subshell_occupancy()
-        ground = build_ground_state_config(self.atomic_number)
+        ground = build_ground_state_config(
+            self.atomic_number, electron_count=self.target_electrons
+        )
         ground = {key: value for key, value in ground.items() if value}
         ground_match = self.is_complete and current == ground
         aufbau_ok = ground_match or current == self._simple_aufbau_config(self.electron_count)
